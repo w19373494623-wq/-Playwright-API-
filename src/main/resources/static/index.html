@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>API 录制工具</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; background: #f5f5f5; padding: 40px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .card { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        h1 { font-size: 22px; margin-bottom: 20px; }
+        .input-row { display: flex; gap: 12px; margin-bottom: 16px; }
+        .input-row input { flex: 1; padding: 10px 14px; font-size: 15px; border: 1px solid #ddd; border-radius: 6px; }
+        .input-row input:focus { outline: none; border-color: #1677ff; }
+        .btn { padding: 10px 24px; font-size: 15px; border: none; border-radius: 6px; cursor: pointer; color: #fff; }
+        .btn-start { background: #1677ff; }
+        .btn-start:hover { background: #0958d9; }
+        .btn-stop { background: #ff4d4f; }
+        .btn-stop:hover { background: #d9363e; }
+        .btn:disabled { background: #d9d9d9; cursor: not-allowed; }
+        .status { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; display: none; }
+        .status.active { display: block; background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; }
+        .status.done { display: block; background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
+        .status.error { display: block; background: #fff2f0; color: #cf1322; border: 1px solid #ffa39e; }
+        .result-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .result-table th, .result-table td { padding: 10px 12px; border: 1px solid #f0f0f0; text-align: left; }
+        .result-table th { background: #fafafa; font-weight: 600; }
+        .result-table tr:hover { background: #fafafa; }
+        .method-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; color: #fff; }
+        .method-GET { background: #1677ff; }
+        .method-POST { background: #389e0d; }
+        .method-PUT { background: #d48806; }
+        .method-DELETE { background: #ff4d4f; }
+        .url-cell { max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        pre { background: #f6f8fa; padding: 12px; border-radius: 6px; font-size: 13px; overflow-x: auto; max-height: 300px; }
+        .count { color: #666; font-size: 14px; margin-bottom: 12px; }
+        .step-tip { color: #666; font-size: 14px; line-height: 1.8; }
+        .step-tip code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🕸️ API 录制工具</h1>
+
+    <div class="card">
+        <div class="input-row">
+            <input type="text" id="urlInput" placeholder="输入要访问的网址，例如 https://example.com" value="https://jsonplaceholder.typicode.com">
+            <button class="btn btn-start" id="startBtn" onclick="startCapture()">开始录制</button>
+            <button class="btn btn-stop" id="stopBtn" onclick="stopCapture()" disabled>停止录制</button>
+        </div>
+
+        <div class="status" id="status"></div>
+        <div class="step-tip" id="stepTip">
+            <strong>使用步骤：</strong><br>
+            ① 输入网址 → ② 点击「开始录制」→ ③ 在打开的浏览器中操作页面<br>
+            ④ 操作完成后回到这里点击「停止录制」→ ⑤ 查看下方结果
+        </div>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <span class="count" id="resultCount">共 0 个 API 请求</span>
+            <button class="btn" style="background:#722ed1; font-size:13px; padding:6px 16px;" onclick="copyResults()">复制 JSON</button>
+        </div>
+        <table class="result-table">
+            <thead>
+                <tr><th>方法</th><th>URL</th><th>状态码</th></tr>
+            </thead>
+            <tbody id="resultBody"></tbody>
+        </table>
+        <div style="margin-top:16px;">
+            <strong>详情：</strong>
+            <pre id="resultDetail">选中一行查看详情</pre>
+        </div>
+    </div>
+</div>
+
+<script>
+    let capturedRequests = [];
+
+    async function startCapture() {
+        const url = document.getElementById('urlInput').value.trim();
+        if (!url) { alert('请输入网址'); return; }
+
+        setStatus('active', '🔄 浏览器正在打开，请等待...');
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        document.getElementById('resultCard').style.display = 'none';
+        capturedRequests = [];
+
+        try {
+            const res = await fetch('/capture/start?url=' + encodeURIComponent(url), { method: 'POST' });
+            const text = await res.text();
+            setStatus('active', '✅ ' + text);
+            document.getElementById('stepTip').innerHTML =
+                '<strong>正在录制中...</strong> 在打开的浏览器里操作页面，操作完后点击下方「停止录制」';
+        } catch (e) {
+            setStatus('error', '❌ 启动失败：' + e.message);
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+        }
+    }
+
+    async function stopCapture() {
+        setStatus('active', '🔄 正在停止录制...');
+        document.getElementById('stopBtn').disabled = true;
+
+        try {
+            const res = await fetch('/capture/stop', { method: 'POST' });
+            capturedRequests = await res.json();
+            renderResults(capturedRequests);
+            setStatus('done', '✅ 录制完成，共捕获 ' + capturedRequests.length + ' 个 API 请求');
+            document.getElementById('startBtn').disabled = false;
+        } catch (e) {
+            setStatus('error', '❌ 停止失败：' + e.message);
+            document.getElementById('stopBtn').disabled = false;
+        }
+    }
+
+    function renderResults(requests) {
+        document.getElementById('resultCard').style.display = 'block';
+        document.getElementById('resultCount').textContent = '共 ' + requests.length + ' 个 API 请求';
+
+        const tbody = document.getElementById('resultBody');
+        tbody.innerHTML = '';
+
+        requests.forEach((req, i) => {
+            const tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            tr.onclick = () => showDetail(i);
+            tr.innerHTML = `
+                <td><span class="method-badge method-${req.method}">${req.method}</span></td>
+                <td class="url-cell">${req.url}</td>
+                <td>${req.statusCode}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        if (requests.length > 0) showDetail(0);
+    }
+
+    function showDetail(index) {
+        const req = capturedRequests[index];
+        const pre = document.getElementById('resultDetail');
+        pre.textContent = JSON.stringify(req, null, 2);
+    }
+
+    function copyResults() {
+        const text = JSON.stringify(capturedRequests, null, 2);
+        navigator.clipboard.writeText(text).then(() => {
+            alert('已复制到剪贴板');
+        });
+    }
+
+    function setStatus(type, msg) {
+        const el = document.getElementById('status');
+        el.className = 'status ' + type;
+        el.textContent = msg;
+    }
+</script>
+</body>
+</html>
