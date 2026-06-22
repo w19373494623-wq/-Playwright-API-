@@ -6,156 +6,472 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: system-ui, sans-serif; background: #f5f5f5; padding: 40px; }
-        .container { max-width: 900px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; }
         .card { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         h1 { font-size: 22px; margin-bottom: 20px; }
+        h2 { font-size: 16px; margin: 16px 0 8px; }
+        h3 { font-size: 15px; margin-bottom: 8px; }
         .input-row { display: flex; gap: 12px; margin-bottom: 16px; }
         .input-row input { flex: 1; padding: 10px 14px; font-size: 15px; border: 1px solid #ddd; border-radius: 6px; }
         .input-row input:focus { outline: none; border-color: #1677ff; }
-        .btn { padding: 10px 24px; font-size: 15px; border: none; border-radius: 6px; cursor: pointer; color: #fff; }
+        .btn { padding: 8px 18px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; color: #fff; white-space: nowrap; }
         .btn-start { background: #1677ff; }
-        .btn-start:hover { background: #0958d9; }
         .btn-stop { background: #ff4d4f; }
-        .btn-stop:hover { background: #d9363e; }
+        .btn-tool { background: #666; font-size: 13px; }
+        .btn-tool:hover { opacity: 0.85; }
+        .btn-ai { background: #722ed1; }
+        .btn-export { background: #389e0d; }
         .btn:disabled { background: #d9d9d9; cursor: not-allowed; }
+        .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
         .status { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; display: none; }
         .status.active { display: block; background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; }
         .status.done { display: block; background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
         .status.error { display: block; background: #fff2f0; color: #cf1322; border: 1px solid #ffa39e; }
-        .result-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        .result-table th, .result-table td { padding: 10px 12px; border: 1px solid #f0f0f0; text-align: left; }
-        .result-table th { background: #fafafa; font-weight: 600; }
-        .result-table tr:hover { background: #fafafa; }
-        .method-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; color: #fff; }
+        .stats-bar { display: flex; gap: 16px; margin-bottom: 16px; padding: 12px 16px; background: #fafafa; border-radius: 6px; font-size: 14px; flex-wrap: wrap; align-items: center; }
+        .stat-ok { background: #f6ffed; color: #389e0d; padding: 2px 10px; border-radius: 4px; }
+        .stat-err { background: #fff2f0; color: #cf1322; padding: 2px 10px; border-radius: 4px; }
+        .stat-redirect { background: #fffbe6; color: #d48806; padding: 2px 10px; border-radius: 4px; }
+        .stat-muted { color: #666; padding: 2px 10px; }
+        .result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .result-table th, .result-table td { padding: 8px 10px; border: 1px solid #f0f0f0; text-align: left; }
+        .result-table th { background: #fafafa; font-weight: 600; white-space: nowrap; }
+        .result-table tr:hover { background: #fafafa; cursor: pointer; }
+        .method-badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; color: #fff; }
         .method-GET { background: #1677ff; }
         .method-POST { background: #389e0d; }
         .method-PUT { background: #d48806; }
         .method-DELETE { background: #ff4d4f; }
-        .url-cell { max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        pre { background: #f6f8fa; padding: 12px; border-radius: 6px; font-size: 13px; overflow-x: auto; max-height: 300px; }
-        .count { color: #666; font-size: 14px; margin-bottom: 12px; }
+        .method-PATCH { background: #722ed1; }
+        .url-cell { max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; margin: 1px 2px; background: #e6f4ff; color: #1677ff; }
+        .tag-ai { background: #f9f0ff; color: #722ed1; }
+        .conf-bar { display: inline-block; height: 4px; border-radius: 2px; background: #722ed1; vertical-align: middle; margin-left: 2px; }
+        .conf-bg { display: inline-block; width: 40px; height: 4px; border-radius: 2px; background: #f0f0f0; vertical-align: middle; margin-left: 2px; }
+        .merged-badge { font-size: 11px; color: #d48806; }
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .detail-block { background: #f6f8fa; border-radius: 6px; padding: 12px; }
+        .detail-block h4 { font-size: 13px; margin-bottom: 6px; color: #555; }
+        .detail-block pre { background: #fff; padding: 10px; border-radius: 4px; font-size: 12px; max-height: 200px; overflow: auto; margin: 0; }
+        .analysis-card { background: #f6f8fa; border-radius: 6px; padding: 16px; margin-top: 12px; }
+        .flow-step { padding: 8px 12px; margin: 4px 0; background: #fff; border-radius: 4px; border-left: 3px solid #1677ff; }
+        .flow-data { border-left-color: #722ed1 !important; }
+        .testcase-block { background: #fff; border-radius: 4px; padding: 12px; margin: 8px 0; border: 1px solid #e8e8e8; }
+        .tc-tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-right: 4px; }
+        .tc-normal { background: #f6ffed; color: #389e0d; }
+        .tc-param { background: #fffbe6; color: #d48806; }
+        .tc-auth { background: #fff2f0; color: #cf1322; }
+        .tc-boundary { background: #e6f4ff; color: #1677ff; }
         .step-tip { color: #666; font-size: 14px; line-height: 1.8; }
         .step-tip code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+        .ctx-badge { font-size: 11px; padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
+        .ctx-shared { background: #f6ffed; color: #389e0d; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>🕸️ API 录制工具</h1>
+    <h1>API 录制工具</h1>
 
     <div class="card">
         <div class="input-row">
-            <input type="text" id="urlInput" placeholder="输入要访问的网址，例如 https://example.com" value="https://jsonplaceholder.typicode.com">
+            <input type="text" id="urlInput" placeholder="输入要访问的网址" value="https://jsonplaceholder.typicode.com">
             <button class="btn btn-start" id="startBtn" onclick="startCapture()">开始录制</button>
             <button class="btn btn-stop" id="stopBtn" onclick="stopCapture()" disabled>停止录制</button>
         </div>
-
         <div class="status" id="status"></div>
         <div class="step-tip" id="stepTip">
             <strong>使用步骤：</strong><br>
             ① 输入网址 → ② 点击「开始录制」→ ③ 在打开的浏览器中操作页面<br>
-            ④ 操作完成后回到这里点击「停止录制」→ ⑤ 查看下方结果
+            ④ 操作完成后点击「停止录制」→ ⑤ 使用下方工具栏分析/导出
         </div>
     </div>
 
     <div class="card" id="resultCard" style="display:none;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <span class="count" id="resultCount">共 0 个 API 请求</span>
-            <button class="btn" style="background:#722ed1; font-size:13px; padding:6px 16px;" onclick="copyResults()">复制 JSON</button>
+        <!-- 工具栏 -->
+        <div class="toolbar">
+            <button class="btn btn-tool" onclick="loadStats()">📊 统计</button>
+            <button class="btn btn-ai" onclick="aiValidate()">🤖 AI 筛选</button>
+            <button class="btn btn-ai" onclick="aiAnalyze()">🔗 链路分析</button>
+            <button class="btn btn-tool" onclick="showDocs()">📄 接口文档</button>
+            <button class="btn btn-export" onclick="exportPostman()">📋 Postman/Apifox</button>
+            <button class="btn btn-ai" onclick="generateTestCases()">🧪 测试用例</button>
         </div>
-        <table class="result-table">
-            <thead>
-                <tr><th>方法</th><th>URL</th><th>状态码</th></tr>
-            </thead>
-            <tbody id="resultBody"></tbody>
-        </table>
-        <div style="margin-top:16px;">
-            <strong>详情：</strong>
-            <pre id="resultDetail">选中一行查看详情</pre>
+
+        <!-- 统计条 -->
+        <div class="stats-bar" id="statsBar" style="display:none;"></div>
+
+        <!-- 表格 -->
+        <div style="overflow-x:auto;">
+            <table class="result-table">
+                <thead>
+                    <tr>
+                        <th>#</th><th>方法</th><th>URL</th><th>状态</th>
+                        <th>领域</th><th>资源</th><th>Step</th><th>置信度</th>
+                    </tr>
+                </thead>
+                <tbody id="resultBody"></tbody>
+            </table>
         </div>
+
+        <!-- 详情 -->
+        <div class="detail-grid" id="detailArea" style="margin-top:12px;">
+            <div class="detail-block" style="grid-column:1/-1;">选中一条请求查看详情</div>
+        </div>
+
+        <!-- AI 分析结果区 -->
+        <div class="analysis-card" id="analysisArea" style="display:none;"></div>
     </div>
 </div>
 
 <script>
-    let capturedRequests = [];
+    let assets = [];
 
     async function startCapture() {
         const url = document.getElementById('urlInput').value.trim();
         if (!url) { alert('请输入网址'); return; }
-
-        setStatus('active', '🔄 浏览器正在打开，请等待...');
+        setStatus('active', '浏览器正在打开，请等待...');
         document.getElementById('startBtn').disabled = true;
         document.getElementById('stopBtn').disabled = false;
         document.getElementById('resultCard').style.display = 'none';
-        capturedRequests = [];
-
+        assets = [];
         try {
-            const res = await fetch('/capture/start?url=' + encodeURIComponent(url), { method: 'POST' });
-            const text = await res.text();
-            setStatus('active', '✅ ' + text);
-            document.getElementById('stepTip').innerHTML =
-                '<strong>正在录制中...</strong> 在打开的浏览器里操作页面，操作完后点击下方「停止录制」';
+            await fetch('/capture/start?url=' + encodeURIComponent(url), { method: 'POST' });
+            setStatus('active', '浏览器已打开，请在打开的浏览器窗口中操作页面');
+            document.getElementById('stepTip').innerHTML = '<strong>正在录制中...</strong> 操作完成后点击下方「停止录制」';
         } catch (e) {
-            setStatus('error', '❌ 启动失败：' + e.message);
+            setStatus('error', '启动失败：' + e.message);
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
         }
     }
 
     async function stopCapture() {
-        setStatus('active', '🔄 正在停止录制...');
+        setStatus('active', '正在停止录制...');
         document.getElementById('stopBtn').disabled = true;
-
         try {
             const res = await fetch('/capture/stop', { method: 'POST' });
-            capturedRequests = await res.json();
-            renderResults(capturedRequests);
-            setStatus('done', '✅ 录制完成，共捕获 ' + capturedRequests.length + ' 个 API 请求');
+            assets = await res.json();
+            renderTable();
+            setStatus('done', '录制完成，共 ' + assets.length + ' 个接口（已指纹合并去重）');
             document.getElementById('startBtn').disabled = false;
+            document.getElementById('analysisArea').style.display = 'none';
         } catch (e) {
-            setStatus('error', '❌ 停止失败：' + e.message);
+            setStatus('error', '停止失败：' + e.message);
             document.getElementById('stopBtn').disabled = false;
         }
     }
 
-    function renderResults(requests) {
+    function renderTable() {
         document.getElementById('resultCard').style.display = 'block';
-        document.getElementById('resultCount').textContent = '共 ' + requests.length + ' 个 API 请求';
-
         const tbody = document.getElementById('resultBody');
         tbody.innerHTML = '';
 
-        requests.forEach((req, i) => {
+        assets.forEach((a, i) => {
             const tr = document.createElement('tr');
-            tr.style.cursor = 'pointer';
             tr.onclick = () => showDetail(i);
+
+            let mergeLabel = '';
+            if (a.mergedFrom && a.mergedFrom.length > 0) {
+                mergeLabel = ' <span class="merged-badge">+' + a.mergedFrom.length + '</span>';
+            }
+
+            let confHtml = '-';
+            if (a.confidence != null) {
+                const pct = Math.round(a.confidence * 100);
+                confHtml = pct + '%<span class="conf-bg"><span class="conf-bar" style="width:' + pct + 'px;"></span></span>';
+            }
+
+            let tagsHtml = '';
+            if (a.ruleTags && a.ruleTags.length) {
+                tagsHtml = a.ruleTags.map(t => '<span class="tag">' + t + '</span>').join('');
+            }
+
             tr.innerHTML = `
-                <td><span class="method-badge method-${req.method}">${req.method}</span></td>
-                <td class="url-cell">${req.url}</td>
-                <td>${req.statusCode}</td>
+                <td>${i + 1}${mergeLabel}</td>
+                <td><span class="method-badge method-${a.method}">${a.method}</span></td>
+                <td class="url-cell">${a.url}</td>
+                <td>${a.statusCode}</td>
+                <td>${a.domain || '-'}</td>
+                <td>${a.resource || '-'} ${tagsHtml}</td>
+                <td>${a.businessStep || '-'}</td>
+                <td>${confHtml}</td>
             `;
             tbody.appendChild(tr);
         });
 
-        if (requests.length > 0) showDetail(0);
+        if (assets.length > 0) showDetail(0);
+        loadStats();
     }
 
     function showDetail(index) {
-        const req = capturedRequests[index];
-        const pre = document.getElementById('resultDetail');
-        pre.textContent = JSON.stringify(req, null, 2);
+        const a = assets[index];
+        const div = document.getElementById('detailArea');
+
+        let html = '';
+        // 原始层
+        html += '<div class="detail-block"><h4>📋 原始层</h4>';
+        html += '<div style="font-size:12px;color:#666;">'
+            + 'Session: ' + (a.sessionId || '-') + ' | 序号: ' + (a.sequenceNumber || index+1)
+            + ' | 时间: ' + new Date(a.timestamp).toLocaleTimeString()
+            + '</div></div>';
+
+        // 规则层
+        html += '<div class="detail-block"><h4>🔧 规则层</h4>';
+        html += '<div style="font-size:12px;">'
+            + 'domain: <strong>' + (a.domain || '-') + '</strong>'
+            + ' | resource: <strong>' + (a.resource || '-') + '</strong>'
+            + ' | fingerprint: <code>' + (a.fingerprint || '-') + '</code>'
+            + ' | tags: ' + (a.ruleTags || []).map(t => '<span class="tag">'+t+'</span>').join(' ');
+        if (a.mergedFrom && a.mergedFrom.length > 0) {
+            html += '<br>合并: ' + a.mergedFrom.map(u => '<code>'+u+'</code>').join(', ');
+        }
+        html += '</div></div>';
+
+        // AI 层
+        html += '<div class="detail-block"><h4>🤖 AI 层</h4>';
+        html += '<div style="font-size:12px;">'
+            + 'businessStep: <strong>' + (a.businessStep || '<span style="color:#999;">未分析</span>') + '</strong>'
+            + ' | intent: <strong>' + (a.intent || '<span style="color:#999;">未分析</span>') + '</strong>'
+            + ' | confidence: ';
+        if (a.confidence != null) {
+            html += '<strong>' + Math.round(a.confidence * 100) + '%</strong>';
+        } else {
+            html += '<span style="color:#999;">未分析</span>';
+        }
+        html += '</div></div>';
+
+        // 请求/响应内容
+        html += '<div class="detail-block"><h4>请求头</h4><pre>' + safeJson(a.request?.headers) + '</pre></div>';
+        html += '<div class="detail-block"><h4>请求体</h4><pre>' + safeJson(a.request?.body) + '</pre></div>';
+        html += '<div class="detail-block"><h4>响应头</h4><pre>' + safeJson(a.response?.headers) + '</pre></div>';
+        html += '<div class="detail-block"><h4>响应体</h4><pre>' + safeJson(a.response?.body) + '</pre></div>';
+
+        div.innerHTML = html;
     }
 
-    function copyResults() {
-        const text = JSON.stringify(capturedRequests, null, 2);
-        navigator.clipboard.writeText(text).then(() => {
-            alert('已复制到剪贴板');
+    function safeJson(data) {
+        if (!data) return '-';
+        try {
+            if (typeof data === 'object') return escapeHtml(JSON.stringify(data, null, 2));
+            return escapeHtml(JSON.stringify(JSON.parse(data), null, 2));
+        } catch (e) {
+            return escapeHtml(String(data));
+        }
+    }
+
+    // ==================== 统计 ====================
+
+    async function loadStats() {
+        if (!assets.length) return;
+        try {
+            const res = await fetch('/capture/stats');
+            const stats = await res.json();
+            const bar = document.getElementById('statsBar');
+            bar.style.display = 'flex';
+            let html = '';
+            if (stats.success > 0) html += '<span class="stat-ok">✅ ' + stats.success + ' 成功</span>';
+            if (stats.redirect > 0) html += '<span class="stat-redirect">↪ ' + stats.redirect + ' 重定向</span>';
+            if (stats.clientError > 0) html += '<span class="stat-err">⚠ ' + stats.clientError + ' 客户端错误</span>';
+            if (stats.serverError > 0) html += '<span class="stat-err">❌ ' + stats.serverError + ' 服务端错误</span>';
+            html += '<span class="stat-muted">共 ' + stats.total + ' 个</span>';
+            if (stats.byDomain) {
+                const domains = Object.entries(stats.byDomain).map(([k,v]) => k+':'+v).join(', ');
+                html += '<span class="stat-muted">| 领域: ' + domains + '</span>';
+            }
+            bar.innerHTML = html;
+        } catch (e) { console.error('stats error', e); }
+    }
+
+    // ==================== AI 筛选 ====================
+
+    async function aiValidate() {
+        setStatus('active', '🤖 AI 正在分析哪些是无效请求...');
+        try {
+            const res = await fetch('/capture/validate', { method: 'POST' });
+            const data = await res.json();
+            assets = data.filtered;
+            renderTable();
+            if (data.removedCount > 0) {
+                const urls = data.removed.map(r => r.url).join(', ');
+                setStatus('done', 'AI 移除了 ' + data.removedCount + ' 个无效请求：' + urls
+                    + ' <span class="ctx-badge ctx-shared">上下文已缓存</span>');
+            } else {
+                setStatus('done', 'AI 判断当前接口均为有效业务 API <span class="ctx-badge ctx-shared">上下文已缓存</span>');
+            }
+        } catch (e) {
+            setStatus('error', 'AI 筛选失败：' + e.message);
+        }
+    }
+
+    // ==================== 链路分析 ====================
+
+    async function aiAnalyze() {
+        setStatus('active', '🤖 AI 正在分析业务链路...');
+        try {
+            const res = await fetch('/capture/analyze', { method: 'POST' });
+            const data = await res.json();
+
+            // 回填 AI 字段到本地 assets
+            if (data.assets) {
+                assets = data.assets;
+                renderTable();
+            }
+
+            const area = document.getElementById('analysisArea');
+            area.style.display = 'block';
+            const s = data.structured || {};
+
+            let html = '<h3>🔗 ' + escapeHtml(s.flowName || '业务链路分析') + '</h3>';
+            if (s.description) html += '<p style="color:#666;margin-bottom:12px;">' + escapeHtml(s.description) + '</p>';
+
+            if (s.steps && s.steps.length) {
+                html += '<h4>业务流程步骤</h4>';
+                s.steps.forEach(step => {
+                    html += '<div class="flow-step">';
+                    html += '<strong>Step ' + step.step + ':</strong> ' + escapeHtml(step.action || '');
+                    html += ' → <code>' + (step.apis || []).join(', ') + '</code>';
+                    if (step.intent) html += ' <span class="tag tag-ai">' + escapeHtml(step.intent) + '</span>';
+                    if (step.description) html += '<br><small>' + escapeHtml(step.description) + '</small>';
+                    html += '</div>';
+                });
+            }
+
+            if (s.dataFlow && s.dataFlow.length) {
+                html += '<h4>数据流转</h4>';
+                s.dataFlow.forEach(df => {
+                    html += '<div class="flow-step flow-data">';
+                    html += '<code>' + escapeHtml(df.from || '') + '</code>';
+                    html += ' → <code>' + escapeHtml(df.to || '') + '</code>';
+                    if (df.value) html += ' <span style="color:#666;">(' + escapeHtml(df.value) + ')</span>';
+                    html += '</div>';
+                });
+            }
+
+            html += '<details style="margin-top:12px;"><summary>原始分析文本</summary>'
+                + '<pre style="font-size:12px;">' + escapeHtml(data.raw || '') + '</pre></details>';
+            area.innerHTML = html;
+
+            setStatus('done', '链路分析完成 ' + (s.steps ? '(' + s.steps.length + ' 个步骤)' : '')
+                + ' <span class="ctx-badge ctx-shared">继承验证上下文</span>');
+        } catch (e) {
+            setStatus('error', '链路分析失败：' + e.message);
+        }
+    }
+
+    // ==================== 接口文档 ====================
+
+    async function showDocs() {
+        try {
+            const res = await fetch('/capture/docs');
+            const md = await res.text();
+            const area = document.getElementById('analysisArea');
+            area.style.display = 'block';
+            area.innerHTML = '<h3>📄 API 接口文档</h3>'
+                + '<pre style="font-size:12px;white-space:pre-wrap;max-height:500px;overflow:auto;">' + escapeHtml(md) + '</pre>'
+                + '<button class="btn btn-export" style="margin-top:8px;" onclick="downloadFile(\'/capture/docs\', \'api-docs.md\')">下载 .md</button>';
+        } catch (e) {
+            setStatus('error', '生成文档失败：' + e.message);
+        }
+    }
+
+    // ==================== Postman/Apifox 导出 ====================
+
+    async function exportPostman() {
+        try {
+            const res = await fetch('/capture/export/postman');
+            const json = await res.json();
+            const envVars = (json.variable && json.variable.variable) ? json.variable.variable : [];
+            const varNames = envVars.map(v => v.key).join(', ');
+            downloadBlob(JSON.stringify(json, null, 2), 'postman-collection.json', 'application/json');
+            setStatus('done', 'Postman/Apifox 集合已下载 🎯 环境变量: {{' + varNames + '}}');
+        } catch (e) {
+            setStatus('error', '导出失败：' + e.message);
+        }
+    }
+
+    // ==================== 测试用例 ====================
+
+    async function generateTestCases() {
+        setStatus('active', '🤖 AI 正在生成测试用例（继承链路分析上下文）...');
+        try {
+            const res = await fetch('/capture/testcases', { method: 'POST' });
+            const data = await res.json();
+            const area = document.getElementById('analysisArea');
+            area.style.display = 'block';
+
+            let html = '<h3>🧪 测试用例</h3>';
+            html += '<button class="btn btn-export" style="margin-bottom:12px;" onclick="copyTestCases()">📋 复制 JSON</button>';
+
+            const cases = data.testCases || [];
+            if (cases.length === 0) {
+                html += '<p style="color:#666;">无测试用例</p>';
+            }
+            cases.forEach((tc, i) => {
+                html += '<div class="testcase-block">';
+                html += '<strong>' + (i + 1) + '. ' + escapeHtml(tc.method || '')
+                    + ' ' + escapeHtml(tc.api || '') + '</strong>';
+                if (tc.businessStep) html += ' <span class="tag tag-ai">' + escapeHtml(tc.businessStep) + '</span>';
+                (tc.cases || []).forEach(c => {
+                    const typeClass = 'tc-' + (c.type || 'normal');
+                    html += '<div style="margin:6px 0 0 16px;padding:8px;background:#fafafa;border-radius:4px;">';
+                    html += '<span class="tc-tag ' + typeClass + '">' + (c.type || 'case') + '</span>';
+                    html += '<span style="font-weight:600;">' + escapeHtml(c.name || '') + '</span>';
+                    if (c.description) html += ' <small>' + escapeHtml(c.description) + '</small>';
+                    if (c.expectStatus != null) {
+                        const cls = c.expectStatus < 400 ? 'stat-ok' : 'stat-err';
+                        html += ' <span class="' + cls + '" style="font-size:11px;">期望 ' + c.expectStatus + '</span>';
+                    }
+                    if (c.input) html += '<pre style="font-size:11px;margin-top:4px;">输入: ' + escapeHtml(JSON.stringify(c.input, null, 2)) + '</pre>';
+                    if (c.assert) html += '<pre style="font-size:11px;">断言: ' + escapeHtml(JSON.stringify(c.assert, null, 2)) + '</pre>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            });
+
+            if (data.raw) {
+                html += '<details style="margin-top:12px;"><summary>原始响应</summary><pre style="font-size:12px;">' + escapeHtml(data.raw) + '</pre></details>';
+            }
+            area.innerHTML = html;
+            setStatus('done', '测试用例生成完成 (' + cases.length + ' 个接口) '
+                + '<span class="ctx-badge ctx-shared">继承链路上下文</span>');
+        } catch (e) {
+            setStatus('error', '生成测试用例失败：' + e.message);
+        }
+    }
+
+    function copyTestCases() {
+        fetch('/capture/testcases', { method: 'POST' }).then(r => r.json()).then(data => {
+            navigator.clipboard.writeText(JSON.stringify(data.testCases || data, null, 2)).then(() => {
+                setStatus('done', '测试用例 JSON 已复制到剪贴板');
+            });
         });
+    }
+
+    // ==================== 工具 ====================
+
+    function downloadFile(url, filename) {
+        fetch(url).then(r => r.text()).then(text => {
+            downloadBlob(text, filename, 'text/markdown');
+        });
+    }
+
+    function downloadBlob(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
+    function escapeHtml(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     function setStatus(type, msg) {
         const el = document.getElementById('status');
         el.className = 'status ' + type;
-        el.textContent = msg;
+        el.innerHTML = msg;
     }
 </script>
 </body>
