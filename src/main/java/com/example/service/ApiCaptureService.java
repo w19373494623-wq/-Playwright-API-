@@ -162,26 +162,20 @@ public class ApiCaptureService {
             page = null;
         }
 
-        // URL 去重
-        List<CapturedRequest> deduplicated = deduplicateByUrl(capturedRequests);
-
-        // 转换为 ApiAsset
+        // 全部转为 ApiAsset（不做 URL 去重，所有真实 API 请求全部保留）
         List<ApiAsset> assets = new ArrayList<>();
-        for (int i = 0; i < deduplicated.size(); i++) {
-            assets.add(new ApiAsset(deduplicated.get(i), i + 1, pageUrl, sessionId));
+        for (int i = 0; i < capturedRequests.size(); i++) {
+            assets.add(new ApiAsset(capturedRequests.get(i), i + 1, pageUrl, sessionId));
         }
 
-        // fingerprint 合并
-        List<ApiAsset> merged = mergeByFingerprint(assets);
+        log.info("录制结束: 共捕获 {} 条请求，保留 {} 条 API 请求",
+                capturedRequests.size(), assets.size());
 
-        log.info("录制结束: 原始 {} → URL去重 {} → API资产 {} → 指纹合并 {}",
-                capturedRequests.size(), deduplicated.size(), assets.size(), merged.size());
-
-        this.lastResult = merged;
+        this.lastResult = assets;
         this.aiContext = new AiContext();
         this.aiContext.setSessionId(sessionId);
-        this.aiContext.setAssets(merged);
-        return merged;
+        this.aiContext.setAssets(assets);
+        return assets;
     }
 
     public List<ApiAsset> applyAiFilter(List<Integer> invalidIndices) {
@@ -215,26 +209,6 @@ public class ApiCaptureService {
 
     public List<ApiAsset> getLastResult() { return lastResult; }
     public AiContext getAiContext() { return aiContext; }
-
-    // ========== fingerprint 合并 ==========
-
-    private List<ApiAsset> mergeByFingerprint(List<ApiAsset> assets) {
-        Map<String, List<ApiAsset>> groups = new LinkedHashMap<>();
-        for (ApiAsset a : assets) {
-            groups.computeIfAbsent(a.getFingerprint(), k -> new ArrayList<>()).add(a);
-        }
-        List<ApiAsset> merged = new ArrayList<>();
-        for (List<ApiAsset> group : groups.values()) {
-            if (group.size() == 1) {
-                merged.add(group.get(0));
-            } else {
-                ApiAsset m = ApiAsset.merge(group.get(0), group.subList(1, group.size()));
-                merged.add(m);
-                log.info("指纹合并: {} ({} 次合并)", m.getFingerprint(), group.size());
-            }
-        }
-        return merged;
-    }
 
     // ========== 规则过滤 ==========
 
@@ -270,11 +244,4 @@ public class ApiCaptureService {
         return result;
     }
 
-    private List<CapturedRequest> deduplicateByUrl(List<CapturedRequest> all) {
-        Map<String, CapturedRequest> seen = new LinkedHashMap<>();
-        for (CapturedRequest r : all) {
-            seen.putIfAbsent(r.getMethod() + " " + r.getUrl(), r);
-        }
-        return new ArrayList<>(seen.values());
-    }
 }
