@@ -1,271 +1,179 @@
 package com.example.model;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.HexFormat;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.net.URI;
+import java.util.*;
 
 public class ApiAsset {
 
-    // ========== 原始层（从浏览器直接捕获）==========
-    private String sessionId;
-    private String pageUrl;
-    private long timestamp;
-    private int sequenceNumber;
-    private String method;
+    // 原始请求数据
     private String url;
-    private Map<String, Object> request;
-    private Map<String, Object> response;
+    private String method;
+    private String requestBody;
     private int statusCode;
+    private String responseBody;
 
-    // ========== 规则层（确定性，代码计算）==========
-    private String domain;          // auth/user/order/product...
-    private String resource;        // login/info/submit/list...
-    private Set<String> ruleTags;   // auth/query/mutation/payment/upload
-    private String fingerprint;     // method:url:hash(requestBody)
-    private boolean isDuplicate;    // 是否被指纹合并
-    private List<String> mergedFrom; // 被合并掉的原始 URL 列表
+    // 解析后的结构化字段
+    private String domain;
+    private String resource;
+    private List<String> ruleTags;
+    private String fingerprint;
+    private List<String> mergedFrom;
 
-    // ========== AI 层（不可靠但语义强，由 AI 填充）==========
-    private String businessStep;    // 登录/浏览商品/下单/支付
-    private String intent;          // 查询/提交/更新/删除
-    private Float confidence;       // AI 判断置信度 0.0~1.0
+    // 请求/响应详情（Map 结构方便序列化）
+    private Map<String, Object> request = new LinkedHashMap<>();
+    private Map<String, Object> response = new LinkedHashMap<>();
 
-    public ApiAsset() {
+    // 录制元信息
+    private String pageUrl;
+    private String sessionId;
+    private int sequence;
+
+    // AI 分析结果
+    private String businessStep;
+    private String intent;
+    private Float confidence;
+
+    public ApiAsset() {}
+
+    public ApiAsset(String url, String method, String requestBody, int statusCode, String responseBody) {
+        this.url = url;
+        this.method = method;
+        this.requestBody = requestBody;
+        this.statusCode = statusCode;
+        this.responseBody = responseBody;
+        this.request.put("body", requestBody);
+        this.response.put("body", responseBody);
     }
 
-    /**
-     * 从原始捕获数据构建 ApiAsset，规则层自动计算
-     */
-    public ApiAsset(CapturedRequest raw, int seq, String pageUrl, String sessionId) {
-        // --- 原始层 ---
-        this.sessionId = sessionId;
+    /** 从 CapturedRequest 构造（带解析、指纹、标签） */
+    public ApiAsset(CapturedRequest req, int seq, String pageUrl, String sessionId) {
+        this.url = req.getUrl();
+        this.method = req.getMethod();
+        this.requestBody = req.getRequestBody();
+        this.statusCode = req.getStatusCode();
+        this.responseBody = req.getResponseBody();
         this.pageUrl = pageUrl;
-        this.timestamp = raw.getTimestamp();
-        this.sequenceNumber = seq;
-        this.method = raw.getMethod();
-        this.url = raw.getUrl();
-        this.statusCode = raw.getStatusCode();
+        this.sessionId = sessionId;
+        this.sequence = seq;
 
-        Map<String, Object> req = new LinkedHashMap<>();
-        if (raw.getRequestHeaders() != null && !raw.getRequestHeaders().isEmpty()) {
-            req.put("headers", new LinkedHashMap<>(raw.getRequestHeaders()));
-        }
-        if (raw.getRequestBody() != null && !raw.getRequestBody().isEmpty()) {
-            req.put("body", raw.getRequestBody());
-        }
-        this.request = req;
+        // 请求/响应详情
+        this.request.put("headers", req.getRequestHeaders());
+        this.request.put("body", req.getRequestBody());
+        this.response.put("headers", req.getResponseHeaders());
+        this.response.put("body", req.getResponseBody());
 
-        Map<String, Object> res = new LinkedHashMap<>();
-        if (raw.getResponseHeaders() != null && !raw.getResponseHeaders().isEmpty()) {
-            res.put("headers", new LinkedHashMap<>(raw.getResponseHeaders()));
-        }
-        if (raw.getResponseBody() != null && !raw.getResponseBody().isEmpty()) {
-            res.put("body", raw.getResponseBody());
-        }
-        this.response = res;
+        // 解析 domain + resource
+        parseUrl();
 
-        // --- 规则层 ---
-        String path = extractPath(url);
-        this.domain = inferDomain(path);
-        this.resource = inferResource(path);
-        this.ruleTags = inferRuleTags(raw);
-        this.fingerprint = computeFingerprint();
-        this.isDuplicate = false;
-        this.mergedFrom = new ArrayList<>();
+        // 规则标签
+        this.ruleTags = tagRequest();
 
-        // --- AI 层（初始为空，由 AI 填充）---
-        this.businessStep = null;
-        this.intent = null;
-        this.confidence = null;
+        // 指纹 = method:domain:resource (不含 query，用于合并同类请求)
+        this.fingerprint = method + ":" + (domain != null ? domain : "") + ":" + (resource != null ? resource : "");
     }
 
-    /**
-     * 当同指纹被合并时，创建合并后的资产
-     */
+    /** 按指纹合并多个相同接口的请求（保留第一个，记录合并来源） */
     public static ApiAsset merge(ApiAsset primary, List<ApiAsset> others) {
-        if (others.isEmpty()) return primary;
-
-        // 保留最新响应
-        ApiAsset latest = primary;
-        List<String> mergedUrls = new ArrayList<>();
+        List<String> mergedFrom = new ArrayList<>();
+        mergedFrom.add(primary.getUrl());
         for (ApiAsset other : others) {
-            mergedUrls.add(other.method + " " + other.url);
-            if (other.timestamp > latest.timestamp) {
-                latest = other;
+            mergedFrom.add(other.getUrl());
+            // 如果有响应体且 primary 没有，补全
+            if (primary.getResponseBody() == null && other.getResponseBody() != null) {
+                primary.setResponseBody(other.getResponseBody());
+                primary.getResponse().put("body", other.getResponseBody());
             }
         }
-
-        ApiAsset merged = new ApiAsset();
-        // 原始层 - 使用主记录的元数据，但响应用最新的
-        merged.sessionId = primary.sessionId;
-        merged.pageUrl = primary.pageUrl;
-        merged.timestamp = primary.timestamp;
-        merged.sequenceNumber = primary.sequenceNumber;
-        merged.method = primary.method;
-        merged.url = primary.url;
-        merged.request = primary.request;
-        merged.response = latest.response;
-        merged.statusCode = latest.statusCode;
-
-        // 规则层
-        merged.domain = primary.domain;
-        merged.resource = primary.resource;
-        merged.ruleTags = new LinkedHashSet<>(primary.ruleTags);
-        merged.fingerprint = primary.fingerprint;
-        merged.isDuplicate = false;
-        merged.mergedFrom = mergedUrls;
-
-        // AI 层 - 保留 primary 的
-        merged.businessStep = primary.businessStep;
-        merged.intent = primary.intent;
-        merged.confidence = latest.confidence;
-
-        return merged;
+        primary.setMergedFrom(mergedFrom);
+        return primary;
     }
 
-    public String computeFingerprint() {
-        String body = (String) request.get("body");
-        String bodyHash = "";
-        if (body != null && !body.isEmpty()) {
-            try {
-                MessageDigest md = MessageDigest.getInstance("SHA-256");
-                byte[] digest = md.digest(body.getBytes(StandardCharsets.UTF_8));
-                bodyHash = HexFormat.of().formatHex(digest).substring(0, 8);
-            } catch (NoSuchAlgorithmException e) {
-                bodyHash = Integer.toHexString(body.hashCode());
-            }
-        }
-        return method + ":" + normalizeUrlForFingerprint(url) + ":" + bodyHash;
-    }
-
-    private String normalizeUrlForFingerprint(String url) {
-        String path = extractPath(url);
-        // 动态参数统一化：/user/123 → /user/:id
-        return path.replaceAll("/\\d+", "/:id")
-                   .replaceAll("/[a-f0-9]{24,}", "/:oid")
-                   .replaceAll("/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", "/:uuid")
-                   .replaceAll("\\?(.*)$", "");  // 去掉 query string
-    }
-
-    // ========== 规则层计算 ==========
-
-    private String extractPath(String url) {
+    private void parseUrl() {
+        if (url == null) { domain = "unknown"; resource = "/"; return; }
         try {
-            return java.net.URI.create(url).getPath();
+            URI uri = URI.create(url);
+            domain = uri.getHost();
+            String path = uri.getPath();
+            resource = (path != null && !path.isEmpty()) ? path : "/";
         } catch (Exception e) {
-            return url;
+            domain = "unknown";
+            resource = url;
         }
     }
 
-    private String inferDomain(String path) {
-        if (path == null || path.isEmpty() || path.equals("/")) return "root";
-        String[] parts = path.split("/");
-        for (String part : parts) {
-            if (part.isEmpty()) continue;
-            // 常见 api 前缀跳过
-            if (part.equals("api") || part.equals("v1") || part.equals("v2") || part.matches("v\\d+")) continue;
-            return part;
-        }
-        return "other";
-    }
-
-    private String inferResource(String path) {
-        if (path == null || path.isEmpty()) return "index";
-        String[] parts = path.split("/");
-        // 取最后一个有意义的段
-        for (int i = parts.length - 1; i >= 0; i--) {
-            String p = parts[i];
-            if (p.isEmpty() || p.matches("\\d+") || p.equals("api") || p.matches("v\\d+")) continue;
-            // 去掉 query string
-            int qm = p.indexOf('?');
-            return qm > 0 ? p.substring(0, qm) : p;
-        }
-        return "index";
-    }
-
-    private Set<String> inferRuleTags(CapturedRequest raw) {
-        Set<String> tags = new LinkedHashSet<>();
-        String lowerUrl = raw.getUrl().toLowerCase();
-        String method = raw.getMethod().toUpperCase();
-
-        // HTTP 方法语义
-        if ("GET".equals(method)) tags.add("query");
-        else if ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method)) {
-            tags.add("mutation");
-        } else if ("DELETE".equals(method)) tags.add("mutation");
-
-        // URL 模式语义
-        if (lowerUrl.contains("login") || lowerUrl.contains("auth") || lowerUrl.contains("token")
-                || lowerUrl.contains("signin") || lowerUrl.contains("signup") || lowerUrl.contains("register")) {
-            tags.add("auth");
-        }
-        if (lowerUrl.contains("pay") || lowerUrl.contains("order") || lowerUrl.contains("checkout")
-                || lowerUrl.contains("charge") || lowerUrl.contains("transaction")) {
-            tags.add("payment");
-        }
-        if (lowerUrl.contains("search") || lowerUrl.contains("query") || lowerUrl.contains("list")
-                || lowerUrl.contains("find") || lowerUrl.contains("filter")) {
-            tags.add("query");
-        }
-        if (lowerUrl.contains("user") || lowerUrl.contains("profile") || lowerUrl.contains("member")
-                || lowerUrl.contains("account")) {
-            tags.add("user");
-        }
-        if (lowerUrl.contains("upload") || lowerUrl.contains("file") || lowerUrl.contains("image")) {
-            tags.add("upload");
-        }
-        if (lowerUrl.contains("config") || lowerUrl.contains("setting") || lowerUrl.contains("option")) {
-            tags.add("config");
-        }
-
+    private List<String> tagRequest() {
+        List<String> tags = new ArrayList<>();
+        if (url == null) return tags;
+        String lower = url.toLowerCase();
+        if (lower.contains("login") || lower.contains("signin") || lower.contains("auth")) tags.add("auth");
+        if (lower.contains("logout") || lower.contains("signout")) tags.add("logout");
+        if (lower.contains("api")) tags.add("api");
+        if (lower.contains("graphql")) tags.add("graphql");
+        if (lower.contains("swagger") || lower.contains("openapi")) tags.add("doc");
+        if (lower.contains("health") || lower.contains("ping")) tags.add("health");
+        if (lower.contains("upload")) tags.add("upload");
+        if (lower.contains("download") || lower.contains("export")) tags.add("download");
+        if (lower.contains("error") || lower.contains("exception")) tags.add("error");
+        if (method != null && method.equalsIgnoreCase("post")) tags.add("write");
+        if (method != null && method.equalsIgnoreCase("get")) tags.add("read");
+        if (method != null && (method.equalsIgnoreCase("put") || method.equalsIgnoreCase("patch"))) tags.add("update");
+        if (method != null && method.equalsIgnoreCase("delete")) tags.add("delete");
         return tags;
     }
 
-    // ========== getters/setters ==========
+    // ===== getters & setters =====
 
-    public String getSessionId() { return sessionId; }
-    public void setSessionId(String v) { sessionId = v; }
-    public String getPageUrl() { return pageUrl; }
-    public void setPageUrl(String v) { pageUrl = v; }
-    public long getTimestamp() { return timestamp; }
-    public void setTimestamp(long v) { timestamp = v; }
-    public int getSequenceNumber() { return sequenceNumber; }
-    public void setSequenceNumber(int v) { sequenceNumber = v; }
-    public String getMethod() { return method; }
-    public void setMethod(String v) { method = v; }
     public String getUrl() { return url; }
-    public void setUrl(String v) { url = v; }
-    public Map<String, Object> getRequest() { return request; }
-    public void setRequest(Map<String, Object> v) { request = v; }
-    public Map<String, Object> getResponse() { return response; }
-    public void setResponse(Map<String, Object> v) { response = v; }
+    public void setUrl(String url) { this.url = url; }
+
+    public String getMethod() { return method; }
+    public void setMethod(String method) { this.method = method; }
+
+    public String getRequestBody() { return requestBody; }
+    public void setRequestBody(String requestBody) { this.requestBody = requestBody; }
+
     public int getStatusCode() { return statusCode; }
-    public void setStatusCode(int v) { statusCode = v; }
+    public void setStatusCode(int statusCode) { this.statusCode = statusCode; }
+
+    public String getResponseBody() { return responseBody; }
+    public void setResponseBody(String responseBody) { this.responseBody = responseBody; }
 
     public String getDomain() { return domain; }
-    public void setDomain(String v) { domain = v; }
+    public void setDomain(String domain) { this.domain = domain; }
+
     public String getResource() { return resource; }
-    public void setResource(String v) { resource = v; }
-    public Set<String> getRuleTags() { return ruleTags; }
-    public void setRuleTags(Set<String> v) { ruleTags = v; }
+    public void setResource(String resource) { this.resource = resource; }
+
+    public List<String> getRuleTags() { return ruleTags; }
+    public void setRuleTags(List<String> ruleTags) { this.ruleTags = ruleTags; }
+
     public String getFingerprint() { return fingerprint; }
-    public void setFingerprint(String v) { fingerprint = v; }
-    public boolean isDuplicate() { return isDuplicate; }
-    public void setDuplicate(boolean v) { isDuplicate = v; }
+    public void setFingerprint(String fingerprint) { this.fingerprint = fingerprint; }
+
     public List<String> getMergedFrom() { return mergedFrom; }
-    public void setMergedFrom(List<String> v) { mergedFrom = v; }
+    public void setMergedFrom(List<String> mergedFrom) { this.mergedFrom = mergedFrom; }
+
+    public Map<String, Object> getRequest() { return request; }
+    public void setRequest(Map<String, Object> request) { this.request = request; }
+
+    public Map<String, Object> getResponse() { return response; }
+    public void setResponse(Map<String, Object> response) { this.response = response; }
+
+    public String getPageUrl() { return pageUrl; }
+    public void setPageUrl(String pageUrl) { this.pageUrl = pageUrl; }
+
+    public String getSessionId() { return sessionId; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+
+    public int getSequence() { return sequence; }
+    public void setSequence(int sequence) { this.sequence = sequence; }
 
     public String getBusinessStep() { return businessStep; }
-    public void setBusinessStep(String v) { businessStep = v; }
+    public void setBusinessStep(String businessStep) { this.businessStep = businessStep; }
+
     public String getIntent() { return intent; }
-    public void setIntent(String v) { intent = v; }
+    public void setIntent(String intent) { this.intent = intent; }
+
     public Float getConfidence() { return confidence; }
-    public void setConfidence(Float v) { confidence = v; }
+    public void setConfidence(Float confidence) { this.confidence = confidence; }
 }
