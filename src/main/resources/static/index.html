@@ -55,6 +55,12 @@
         .analysis-card { background: #f6f8fa; border-radius: 6px; padding: 16px; margin-top: 12px; }
         .flow-step { padding: 8px 12px; margin: 4px 0; background: #fff; border-radius: 4px; border-left: 3px solid #1677ff; }
         .flow-data { border-left-color: #722ed1 !important; }
+        .scenario-card { background: #fff; border-radius: 8px; padding: 16px; margin: 12px 0; border: 1px solid #e8e8e8; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .scenario-card h4 { font-size: 15px; margin-bottom: 4px; color: #1677ff; }
+        .scenario-desc { font-size: 13px; color: #666; margin-bottom: 12px; }
+        .scenario-step { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin: 3px 0; background: #fafafa; border-radius: 4px; font-size: 13px; }
+        .scenario-step .step-num { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; background: #1677ff; color: #fff; border-radius: 50%; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+        .scenario-step code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
         .testcase-block { background: #fff; border-radius: 4px; padding: 12px; margin: 8px 0; border: 1px solid #e8e8e8; }
         .tc-tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-right: 4px; }
         .tc-normal { background: #f6ffed; color: #389e0d; }
@@ -89,8 +95,9 @@
         <!-- 工具栏 -->
         <div class="toolbar">
             <button class="btn btn-tool" onclick="loadStats()">📊 统计</button>
-            <button class="btn btn-ai" onclick="aiValidate()">🤖 AI 筛选</button>
-            <button class="btn btn-ai" onclick="aiAnalyze()">🔗 链路分析</button>
+            <button class="btn btn-ai" onclick="aiValidate()">🎯 AI 去重</button>
+            <button class="btn btn-ai" onclick="loadScenarios()">🔗 业务场景</button>
+            <button class="btn btn-ai" onclick="aiAnalyze()">📊 链路分析</button>
             <button class="btn btn-tool" onclick="showDocs()">📄 接口文档</button>
             <button class="btn btn-export" onclick="exportPostman()">📋 Postman/Apifox</button>
             <button class="btn btn-ai" onclick="generateTestCases()">🧪 测试用例</button>
@@ -119,6 +126,9 @@
 
         <!-- AI 分析结果区 -->
         <div class="analysis-card" id="analysisArea" style="display:none;"></div>
+
+        <!-- AI 去重结果区（独立容器，不被其他操作覆盖） -->
+        <div class="analysis-card" id="dedupArea" style="display:none;"></div>
     </div>
 </div>
 
@@ -281,24 +291,106 @@
         } catch (e) { console.error('stats error', e); }
     }
 
-    // ==================== AI 筛选 ====================
+    // ==================== 业务场景链路 ====================
+
+    async function loadScenarios() {
+        setStatus('active', '🔗 AI 正在识别业务场景...');
+        try {
+            const res = await fetch('/capture/scenarios', { method: 'POST' });
+            const data = await res.json();
+            const area = document.getElementById('analysisArea');
+            area.style.display = 'block';
+
+            if (data.error) {
+                area.innerHTML = '<div style="padding:16px;color:#cf1322;">' + escapeHtml(data.error) + '</div>';
+                setStatus('error', data.error);
+                return;
+            }
+
+            const scenarios = data.scenarios || [];
+            if (scenarios.length === 0) {
+                area.innerHTML = '<p style="color:#666;">未识别出业务场景</p>';
+                setStatus('done', '未识别出业务场景');
+                return;
+            }
+
+            let html = '<h3>🔗 业务场景链路</h3>';
+            html += '<p style="color:#666;margin-bottom:12px;">共识别 <strong>' + scenarios.length + '</strong> 个业务场景</p>';
+
+            scenarios.forEach((s, si) => {
+                html += '<div class="scenario-card">';
+                html += '<h4>' + (si + 1) + '. ' + escapeHtml(s.name || '未命名场景') + '</h4>';
+                if (s.description) html += '<div class="scenario-desc">' + escapeHtml(s.description) + '</div>';
+
+                const steps = s.steps || [];
+                steps.forEach(step => {
+                    const methodClass = 'method-' + (step.method || 'GET');
+                    html += '<div class="scenario-step">';
+                    html += '<span class="step-num">' + (step.step || '-') + '</span>';
+                    html += '<span class="method-badge ' + methodClass + '">' + (step.method || '') + '</span>';
+                    html += '<code>' + escapeHtml(step.resource || step.url || '') + '</code>';
+                    html += '<span style="color:#666;font-size:12px;margin-left:auto;">' + escapeHtml(step.action || '') + '</span>';
+                    html += '</div>';
+                });
+
+                html += '</div>';
+            });
+
+            if (data.raw) {
+                html += '<details style="margin-top:12px;"><summary>AI 原始响应</summary>'
+                    + '<pre style="font-size:12px;">' + escapeHtml(data.raw) + '</pre></details>';
+            }
+
+            area.innerHTML = html;
+            setStatus('done', '业务场景识别完成，共 ' + scenarios.length + ' 个场景');
+        } catch (e) {
+            setStatus('error', '业务场景识别失败：' + e.message);
+        }
+    }
+
+    // ==================== AI 去重 ====================
 
     async function aiValidate() {
-        setStatus('active', '🤖 AI 正在分析哪些是无效请求...');
         try {
-            const res = await fetch('/capture/validate', { method: 'POST' });
+            const res = await fetch('/capture/ai-dedup', { method: 'POST' });
             const data = await res.json();
-            assets = data.filtered;
-            renderTable();
-            if (data.removedCount > 0) {
-                const urls = data.removed.map(r => r.url).join(', ');
-                setStatus('done', 'AI 移除了 ' + data.removedCount + ' 个无效请求：' + urls
-                    + ' <span class="ctx-badge ctx-shared">上下文已缓存</span>');
-            } else {
-                setStatus('done', 'AI 判断当前接口均为有效业务 API <span class="ctx-badge ctx-shared">上下文已缓存</span>');
+            const area = document.getElementById('dedupArea');
+            area.style.display = 'block';
+
+            let html = '<h3>🎯 AI 接口去重结果</h3>';
+            html += '<p style="color:#666;margin-bottom:12px;">原始 ' + data.totalRaw + ' 个 → 去重后 <strong>' + data.total + '</strong> 个</p>';
+
+            if (data.fallback) {
+                html += '<div style="padding:8px 12px;background:#fffbe6;border-radius:4px;margin-bottom:12px;font-size:13px;">'
+                    + '⚠️ AI 返回格式异常，已回退到机械去重（按 method + resource 合并）</div>';
             }
+
+            html += '<table class="result-table"><thead><tr>'
+                + '<th>#</th><th>方法</th><th>接口名称</th><th>Resource</th><th>调用次数</th><th>URL 示例</th>'
+                + '</tr></thead><tbody>';
+
+            (data.apis || []).forEach((a, i) => {
+                html += '<tr>'
+                    + '<td>' + (i + 1) + '</td>'
+                    + '<td><span class="method-badge method-' + a.method + '">' + a.method + '</span></td>'
+                    + '<td><strong>' + escapeHtml(a.apiName || '-') + '</strong></td>'
+                    + '<td><code>' + escapeHtml(a.resource || '-') + '</code></td>'
+                    + '<td>' + (a.callCount || 1) + '</td>'
+                    + '<td class="url-cell">' + escapeHtml(a.urlExample || '-') + '</td>'
+                    + '</tr>';
+            });
+
+            html += '</tbody></table>';
+
+            if (data.raw) {
+                html += '<details style="margin-top:12px;"><summary>AI 原始响应</summary>'
+                    + '<pre style="font-size:12px;">' + escapeHtml(data.raw) + '</pre></details>';
+            }
+
+            area.innerHTML = html;
+            setStatus('done', 'AI 去重完成：' + data.totalRaw + ' → ' + data.total + ' 个');
         } catch (e) {
-            setStatus('error', 'AI 筛选失败：' + e.message);
+            setStatus('error', 'AI 去重失败：' + e.message);
         }
     }
 

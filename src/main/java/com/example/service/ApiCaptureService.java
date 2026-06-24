@@ -1,247 +1,234 @@
 package com.example.service;
 
+import com.example.analysis.SchemaInferrer;
+import com.example.analysis.UrlParser;
+import com.example.capture.BrowserManager;
+import com.example.capture.FetchXhrInterceptor;
+import com.example.capture.ResponseInterceptor;
+import com.example.filter.AssetFilter;
+import com.example.filter.ClassifyFilter;
 import com.example.model.AiContext;
 import com.example.model.ApiAsset;
-import com.example.model.CapturedRequest;
+import com.example.model.BusinessFlow;
 import com.microsoft.playwright.Browser;
-import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
-import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class ApiCaptureService {
 
     private static final Logger log = LoggerFactory.getLogger(ApiCaptureService.class);
 
-    // ========== 第一层过滤：规则（黑名单，确定性）==========
-    private static final Set<String> STATIC_EXTENSIONS = Set.of(
-            ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg",
-            ".woff", ".woff2", ".ttf", ".eot", ".map", ".webp", ".mp4",
-            ".mp3", ".avi", ".mov", ".webm", ".pdf", ".zip", ".gz", ".tar"
-    );
+    // ========== 依赖注入 ==========
 
-    private static final Set<String> TRACKING_PATTERNS = Set.of(
-            "google-analytics.com", "googletagmanager.com", "gtag",
-            "baidu.com/hm.js", "hm.baidu.com", "tongji.baidu.com",
-            "analytics", "doubleclick.net", "facebook.net/tr",
-            "hotjar.com", "clarity.ms", "mouseflow.com",
-            "tracking", "beacon", "collect", "log.gif",
-            "rum", "telemetry", "metrics", "sentry", "sentry.io"
-    );
+    private final BrowserManager browserManager;
+    private final ResponseInterceptor responseInterceptor;
+    private final FetchXhrInterceptor fetchXhrInterceptor;
+    private final List<AssetFilter> assetFilters;
+    private final SchemaInferrer schemaInferrer;
+    private final UrlParser urlParser;
+    private final ClassifyFilter classifyFilter;
+    private final ActionRecognizer actionRecognizer;
 
-    // ========== 浏览器单例（复用，避免每次启动重建）==========
-    private static volatile Playwright sharedPlaywright;
-    private static volatile Browser sharedBrowser;
+    public ApiCaptureService(BrowserManager browserManager,
+                             ResponseInterceptor responseInterceptor,
+                             FetchXhrInterceptor fetchXhrInterceptor,
+                             List<AssetFilter> assetFilters,
+                             SchemaInferrer schemaInferrer,
+                             UrlParser urlParser,
+                             ClassifyFilter classifyFilter,
+                             ActionRecognizer actionRecognizer) {
+        this.browserManager = browserManager;
+        this.responseInterceptor = responseInterceptor;
+        this.fetchXhrInterceptor = fetchXhrInterceptor;
+        this.assetFilters = assetFilters;
+        this.schemaInferrer = schemaInferrer;
+        this.urlParser = urlParser;
+        this.classifyFilter = classifyFilter;
+        this.actionRecognizer = actionRecognizer;
+    }
+
+    // ========== 运行时状态 ==========
 
     private Page page;
-    private String sessionId;
-    private String pageUrl;
-    private boolean capturing;
-    private final AtomicInteger sequence = new AtomicInteger(0);
-    private final List<CapturedRequest> capturedRequests = new CopyOnWriteArrayList<>();
+    private BrowserContext browserContext;
+    private volatile boolean capturing;
+    private final List<ApiAsset> capturedRequests = new CopyOnWriteArrayList<>();
+    private volatile int totalResponsesSeen;
     private List<ApiAsset> lastResult;
+    private BusinessFlow lastFlow;
     private AiContext aiContext;
+    private String pageUrl;
+    private String sessionId;
+    private String mainDomain;
 
-    /**
-     * 懒加载 Playwright + Browser，只初始化一次
-     */
-    private synchronized Browser getOrCreateBrowser() {
-        if (sharedPlaywright == null) {
-            log.info("首次启动 Playwright 引擎...");
-            sharedPlaywright = Playwright.create();
-        }
-        if (sharedBrowser == null || !sharedBrowser.isConnected()) {
-            log.info("启动 Chromium 浏览器...");
-            sharedBrowser = sharedPlaywright.chromium().launch(
-                    new BrowserType.LaunchOptions()
-                            .setHeadless(false));
-        }
-        return sharedBrowser;
-    }
-
-    @PreDestroy
-    public synchronized void destroy() {
-        log.info("销毁浏览器资源...");
-        if (sharedBrowser != null) {
-            try { sharedBrowser.close(); } catch (Exception ignored) {}
-            sharedBrowser = null;
-        }
-        if (sharedPlaywright != null) {
-            try { sharedPlaywright.close(); } catch (Exception ignored) {}
-            sharedPlaywright = null;
-        }
-    }
+    // ========== 启动/停止 ==========
 
     public synchronized void start(String url) {
         capturedRequests.clear();
         lastResult = null;
         aiContext = null;
-        sequence.set(0);
-        this.sessionId = UUID.randomUUID().toString().substring(0, 8);
         this.pageUrl = url;
+        this.mainDomain = urlParser.extractDomain(url);
+        this.sessionId = String.valueOf(System.currentTimeMillis());
+        this.totalResponsesSeen = 0;
 
-        Browser browser = getOrCreateBrowser();
-        // 复用已有页面或创建新页面
-        if (page != null) {
-            try { page.close(); } catch (Exception ignored) {}
-        }
-        page = browser.newPage();
+        log.info("启动录制，目标地址: {} (主域名: {})", url, mainDomain);
 
-        page.onResponse(response -> {
+        Browser browser = browserManager.getOrCreateBrowser();
+
+        // 关闭旧页面和旧上下文
+        browserManager.closePage(page);
+        browserManager.closeContext(browserContext);
+
+        // 创建独立浏览器上下文（隔离 cookie/缓存）
+        browserContext = browser.newContext();
+
+        // 隐藏自动化标记
+        browserContext.addInitScript(
+                "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
+        );
+
+        // 注入 fetch/XHR 补丁：拦截所有 API 调用（包括 MSW/proxy 层拦截的请求）
+        fetchXhrInterceptor.install(browserContext);
+
+        page = browserContext.newPage();
+
+        // ========== 诊断监听 ==========
+
+        page.onConsoleMessage(msg -> {
+            String type = msg.type();
+            String text = msg.text();
+            if ("error".equals(type) || "warning".equals(type)) {
+                log.warn("🛑 页面 JS [{}]: {}", type, text);
+            } else {
+                log.info("📋 页面控制台 [{}]: {}", type, text);
+            }
+        });
+
+        page.onPageError(error -> {
+            log.error("🔥 页面运行时错误: {}", error);
+        });
+
+        page.onRequest(request -> {
             if (!capturing) return;
-            String reqUrl = response.request().url();
-            String method = response.request().method();
+            String reqUrl = request.url();
+            if (reqUrl.startsWith("data:") || reqUrl.startsWith("blob:")) return;
+            String rt = request.resourceType();
+            String mark = "xhr".equals(rt) || "fetch".equals(rt) ? "✅" : "⏭️";
+            log.info("{} 请求: {} {} (resourceType={})", mark, request.method(), reqUrl, rt);
+        });
 
-            if (shouldSkipByRules(reqUrl, method)) return;
+        // ========== 响应捕获（通过 ResponseInterceptor）==========
 
-            int statusCode;
-            try {
-                statusCode = response.status();
-            } catch (Exception e) {
-                log.warn("获取状态码失败: {} {}", method, reqUrl);
-                return;
-            }
-
-            Map<String, String> requestHeaders = extractHeaders(response.request().headers());
-            Map<String, String> responseHeaders = extractHeaders(response.headers());
-
-            String requestBody = null;
-            try {
-                requestBody = response.request().postData();
-            } catch (Exception ignored) {}
-
-            String responseBody = null;
-            String contentType = responseHeaders.getOrDefault("content-type", "");
-            if (isReadableContent(contentType)) {
-                try {
-                    byte[] bodyBytes = response.body();
-                    if (bodyBytes != null && bodyBytes.length > 0 && bodyBytes.length < 512 * 1024) {
-                        responseBody = new String(bodyBytes, java.nio.charset.StandardCharsets.UTF_8);
-                    }
-                } catch (Exception e) {
-                    log.warn("读取响应体失败: {} {} (status={})", method, reqUrl, statusCode);
-                }
-            }
-
-            int seq = sequence.incrementAndGet();
-            CapturedRequest captured = new CapturedRequest(
-                    reqUrl, method, requestHeaders, requestBody,
-                    statusCode, responseHeaders, responseBody,
-                    System.currentTimeMillis(), seq);
-            capturedRequests.add(captured);
-            log.info("捕获 [{}]: {} {} -> {}", seq, method, reqUrl, statusCode);
+        responseInterceptor.install(page, asset -> {
+            if (!capturing) return;
+            totalResponsesSeen++;
+            asset.setPageUrl(pageUrl);
+            asset.setSessionId(sessionId);
+            capturedRequests.add(asset);
         });
 
         capturing = true;
         page.navigate(url);
-        log.info("浏览器已就绪，等待用户操作... (session: {})", sessionId);
+        log.info("浏览器已就绪，等待用户操作... sessionId={}", sessionId);
     }
 
-    /**
-     * 停止录制（不关浏览器，只关闭页面，下次启动秒开）
-     */
-    public List<ApiAsset> stopAndFilter() {
-        capturing = false;
+    public synchronized List<ApiAsset> stopAndFilter() {
         log.info("停止录制...");
 
-        if (page != null) {
-            try { page.close(); } catch (Exception ignored) {}
-            page = null;
+        // 1) 先提取 fetch/XHR 补丁数据（页面还活着）
+        int patchedCount = fetchXhrInterceptor.extractPatchedData(page, pageUrl, sessionId,
+                asset -> capturedRequests.add(asset));
+        if (patchedCount > 0) {
+            log.info("从 fetch/XHR 补丁读取到 {} 条 API 调用", patchedCount);
         }
 
-        // 全部转为 ApiAsset（不做 URL 去重，所有真实 API 请求全部保留）
-        List<ApiAsset> assets = new ArrayList<>();
-        for (int i = 0; i < capturedRequests.size(); i++) {
-            assets.add(new ApiAsset(capturedRequests.get(i), i + 1, pageUrl, sessionId));
+        // 2) 关闭页面/上下文（此时 capturing 仍为 true，关闭触发的响应回调和 onResponse 事件仍可被捕获）
+        browserManager.closePage(page);
+        browserManager.closeContext(browserContext);
+        page = null;
+        browserContext = null;
+
+        // 3) 关闭后再停止收集，避免错过关闭瞬间到达的响应
+        capturing = false;
+
+        // ---- 过滤链：静态资源 → 埋点/监控 → 去重 ----
+        List<ApiAsset> current = new ArrayList<>(capturedRequests);
+        for (AssetFilter f : assetFilters) {
+            current = f.filter(current);
         }
 
-        log.info("录制结束: 共捕获 {} 条请求，保留 {} 条 API 请求",
-                capturedRequests.size(), assets.size());
+        // ---- 补充 domain / resource ----
+        enrichAssets(current);
 
-        this.lastResult = assets;
-        this.aiContext = new AiContext();
-        this.aiContext.setSessionId(sessionId);
-        this.aiContext.setAssets(assets);
-        return assets;
+        // ---- 分配序号 ----
+        for (int i = 0; i < current.size(); i++) {
+            current.get(i).setSequence(i + 1);
+        }
+
+        // ---- 接口分类 ----
+        classifyFilter.setMainDomain(mainDomain);
+        classifyFilter.classify(current);
+
+        lastResult = current;
+
+        // ---- 业务动作识别 ----
+        lastFlow = actionRecognizer.buildFlow(current);
+        log.info("业务动作识别完成: 场景={}, 动作数={}", lastFlow.getScenario(), lastFlow.getActions().size());
+
+        log.info("录制结束: 总计看到 {} 个响应，原始捕获 {} 条 → 过滤后 {} 条",
+                totalResponsesSeen, capturedRequests.size(), current.size());
+        return current;
     }
 
-    public List<ApiAsset> applyAiFilter(List<Integer> invalidIndices) {
-        if (lastResult == null || invalidIndices.isEmpty()) return lastResult;
+    // ========== 公开接口 ==========
 
-        Set<Integer> removeSet = Set.copyOf(invalidIndices);
-        List<ApiAsset> filtered = new ArrayList<>();
-        List<Map<String, Object>> removedDetails = new ArrayList<>();
+    public List<ApiAsset> getRawCaptures() {
+        return new ArrayList<>(capturedRequests);
+    }
 
-        for (int i = 0; i < lastResult.size(); i++) {
-            if (removeSet.contains(i)) {
-                ApiAsset a = lastResult.get(i);
-                removedDetails.add(Map.of(
-                        "index", i, "url", a.getUrl(), "method", a.getMethod(),
-                        "domain", a.getDomain(), "resource", a.getResource()));
-            } else {
-                filtered.add(lastResult.get(i));
+    public List<ApiAsset> getLastResult() {
+        return lastResult;
+    }
+
+    public BusinessFlow getLastFlow() {
+        return lastFlow;
+    }
+
+    public AiContext getAiContext() {
+        return aiContext;
+    }
+
+    public String getMainDomain() {
+        return mainDomain;
+    }
+
+    // ========== 内部方法 ==========
+
+    private void enrichAssets(List<ApiAsset> assets) {
+        for (ApiAsset a : assets) {
+            String url = a.getUrl();
+            if (url == null) { a.setDomain("unknown"); a.setResource("/"); continue; }
+            try {
+                URI uri = URI.create(url);
+                a.setDomain(uri.getHost());
+                String path = uri.getPath();
+                a.setResource(path != null && !path.isEmpty() ? path : "/");
+            } catch (Exception e) {
+                a.setDomain("unknown");
+                a.setResource(url);
             }
         }
-
-        if (aiContext != null) {
-            aiContext.setRemovedIndices(new ArrayList<>(removeSet));
-            aiContext.setRemovedDetails(removedDetails);
-            aiContext.setAssets(filtered);
-        }
-
-        this.lastResult = filtered;
-        log.info("AI 二次过滤: 移除 {}, 剩余 {}", invalidIndices.size(), filtered.size());
-        return filtered;
     }
-
-    public List<ApiAsset> getLastResult() { return lastResult; }
-    public AiContext getAiContext() { return aiContext; }
-
-    // ========== 规则过滤 ==========
-
-    private boolean shouldSkipByRules(String url, String method) {
-        if (url.startsWith("data:") || url.startsWith("blob:")
-                || url.startsWith("ws:") || url.startsWith("wss:")) return true;
-        if ("OPTIONS".equalsIgnoreCase(method)) return true;
-
-        String lowerUrl = url.toLowerCase();
-        for (String ext : STATIC_EXTENSIONS) {
-            int idx = lowerUrl.indexOf(ext);
-            if (idx >= 0 && (idx + ext.length() == lowerUrl.length()
-                    || lowerUrl.charAt(idx + ext.length()) == '?'
-                    || lowerUrl.charAt(idx + ext.length()) == '#')) return true;
-        }
-        for (String kw : TRACKING_PATTERNS) {
-            if (lowerUrl.contains(kw)) return true;
-        }
-        return false;
-    }
-
-    private boolean isReadableContent(String contentType) {
-        if (contentType == null || contentType.isEmpty()) return false;
-        String ct = contentType.toLowerCase();
-        return ct.contains("json") || ct.contains("xml")
-                || ct.contains("text") || ct.contains("javascript")
-                || ct.contains("x-www-form-urlencoded");
-    }
-
-    private Map<String, String> extractHeaders(Map<String, String> raw) {
-        Map<String, String> result = new LinkedHashMap<>();
-        if (raw != null) raw.forEach((k, v) -> result.put(k.toLowerCase(), v));
-        return result;
-    }
-
 }

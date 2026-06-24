@@ -23,6 +23,12 @@ public class ApiAsset {
     private Map<String, Object> request = new LinkedHashMap<>();
     private Map<String, Object> response = new LinkedHashMap<>();
 
+    // 结构化字段
+    private Map<String, String> headers;
+    private Map<String, Object> query;
+    private Map<String, Object> requestSchema;
+    private Map<String, Object> responseSchema;
+
     // 录制元信息
     private String pageUrl;
     private String sessionId;
@@ -32,6 +38,9 @@ public class ApiAsset {
     private String businessStep;
     private String intent;
     private Float confidence;
+
+    // 接口分类: business | auth | static | monitoring | third_party
+    private String category;
 
     public ApiAsset() {}
 
@@ -43,49 +52,11 @@ public class ApiAsset {
         this.responseBody = responseBody;
         this.request.put("body", requestBody);
         this.response.put("body", responseBody);
-    }
 
-    /** 从 CapturedRequest 构造（带解析、指纹、标签） */
-    public ApiAsset(CapturedRequest req, int seq, String pageUrl, String sessionId) {
-        this.url = req.getUrl();
-        this.method = req.getMethod();
-        this.requestBody = req.getRequestBody();
-        this.statusCode = req.getStatusCode();
-        this.responseBody = req.getResponseBody();
-        this.pageUrl = pageUrl;
-        this.sessionId = sessionId;
-        this.sequence = seq;
-
-        // 请求/响应详情
-        this.request.put("headers", req.getRequestHeaders());
-        this.request.put("body", req.getRequestBody());
-        this.response.put("headers", req.getResponseHeaders());
-        this.response.put("body", req.getResponseBody());
-
-        // 解析 domain + resource
+        // 自动解析
         parseUrl();
-
-        // 规则标签
         this.ruleTags = tagRequest();
-
-        // 指纹 = method:domain:resource (不含 query，用于合并同类请求)
         this.fingerprint = method + ":" + (domain != null ? domain : "") + ":" + (resource != null ? resource : "");
-    }
-
-    /** 按指纹合并多个相同接口的请求（保留第一个，记录合并来源） */
-    public static ApiAsset merge(ApiAsset primary, List<ApiAsset> others) {
-        List<String> mergedFrom = new ArrayList<>();
-        mergedFrom.add(primary.getUrl());
-        for (ApiAsset other : others) {
-            mergedFrom.add(other.getUrl());
-            // 如果有响应体且 primary 没有，补全
-            if (primary.getResponseBody() == null && other.getResponseBody() != null) {
-                primary.setResponseBody(other.getResponseBody());
-                primary.getResponse().put("body", other.getResponseBody());
-            }
-        }
-        primary.setMergedFrom(mergedFrom);
-        return primary;
     }
 
     private void parseUrl() {
@@ -159,6 +130,18 @@ public class ApiAsset {
     public Map<String, Object> getResponse() { return response; }
     public void setResponse(Map<String, Object> response) { this.response = response; }
 
+    public Map<String, String> getHeaders() { return headers; }
+    public void setHeaders(Map<String, String> headers) { this.headers = headers; }
+
+    public Map<String, Object> getQuery() { return query; }
+    public void setQuery(Map<String, Object> query) { this.query = query; }
+
+    public Map<String, Object> getRequestSchema() { return requestSchema; }
+    public void setRequestSchema(Map<String, Object> requestSchema) { this.requestSchema = requestSchema; }
+
+    public Map<String, Object> getResponseSchema() { return responseSchema; }
+    public void setResponseSchema(Map<String, Object> responseSchema) { this.responseSchema = responseSchema; }
+
     public String getPageUrl() { return pageUrl; }
     public void setPageUrl(String pageUrl) { this.pageUrl = pageUrl; }
 
@@ -176,4 +159,7 @@ public class ApiAsset {
 
     public Float getConfidence() { return confidence; }
     public void setConfidence(Float confidence) { this.confidence = confidence; }
+
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
 }
