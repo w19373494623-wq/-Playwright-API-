@@ -2,6 +2,8 @@ package com.example.controller;
 
 import com.example.model.AiContext;
 import com.example.model.ApiAsset;
+import com.example.model.BusinessFlow;
+import com.example.service.ActionRecognizer;
 import com.example.service.AiChatService;
 import com.example.service.ApiCaptureService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,9 +18,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -48,6 +52,72 @@ public class CaptureController {
     @PostMapping("/capture/stop")
     public List<ApiAsset> stop() {
         return apiCaptureService.stopAndFilter();
+    }
+
+    /** 实时查看原始捕获（未经过滤），操作过程中可随时查看 */
+    @GetMapping("/capture/raw")
+    public Map<String, Object> rawCaptures() {
+        List<ApiAsset> raw = apiCaptureService.getRawCaptures();
+        List<Map<String, String>> list = new ArrayList<>();
+        for (ApiAsset a : raw) {
+            Map<String, String> item = new LinkedHashMap<>();
+            item.put("method", a.getMethod());
+            item.put("url", a.getUrl());
+            item.put("status", String.valueOf(a.getStatusCode()));
+            list.add(item);
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("total", raw.size());
+        result.put("captures", list);
+        return result;
+    }
+
+    // ==================== 业务动作流 ====================
+
+    @GetMapping("/capture/flow")
+    public BusinessFlow getFlow() {
+        BusinessFlow flow = apiCaptureService.getLastFlow();
+        if (flow == null) {
+            return new BusinessFlow("无录制数据", "请先执行录制操作", List.of());
+        }
+        return flow;
+    }
+
+    // ==================== 接口去重（按 resource 聚合，同一接口只留一个）====================
+
+    @GetMapping("/capture/unique")
+    public Map<String, Object> uniqueApis() {
+        List<ApiAsset> assets = apiCaptureService.getLastResult();
+        if (assets == null || assets.isEmpty()) {
+            return Map.of("total", 0, "totalRaw", 0, "apis", List.of());
+        }
+
+        // 按 method + resource 去重，保留第一个出现的
+        Map<String, ApiAsset> seen = new LinkedHashMap<>();
+        for (ApiAsset a : assets) {
+            String key = a.getMethod() + " " + (a.getResource() != null ? a.getResource() : a.getUrl());
+            seen.putIfAbsent(key, a);
+        }
+
+        int idx = 1;
+        List<Map<String, Object>> apis = new ArrayList<>();
+        for (ApiAsset a : seen.values()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("seq", idx++);
+            item.put("method", a.getMethod());
+            item.put("url", a.getUrl());
+            item.put("resource", a.getResource());
+            item.put("status", a.getStatusCode());
+            item.put("category", a.getCategory());
+            item.put("domain", a.getDomain());
+            apis.add(item);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("total", apis.size());
+        result.put("totalRaw", assets.size());
+        result.put("apis", apis);
+        return result;
     }
 
     // ==================== 统计 ====================
@@ -83,67 +153,242 @@ public class CaptureController {
         return result;
     }
 
-    // ==================== AI 二次过滤（双层过滤的第二层）====================
+    // ==================== 三层结构输出 ====================
 
-    @PostMapping("/capture/validate")
-    public Map<String, Object> validate() {
+    @GetMapping("/capture/layers")
+    public Map<String, Object> layers() {
         List<ApiAsset> assets = apiCaptureService.getLastResult();
         if (assets == null || assets.isEmpty()) {
-            return Map.of("filtered", List.of(), "removed", List.of());
+            return Map.of("layer1", List.of(), "layer2", Map.of(), "layer3", Map.of());
         }
 
-        String aiResponse;
-        try {
-            aiResponse = aiChatService.chat("validate", buildValidatePrompt(assets));
-        } catch (Exception e) {
-            log.warn("AI 调用失败，跳过二次过滤: {}", e.getMessage());
-            return Map.of("filtered", assets, "removed", List.of(),
-                    "removedCount", 0, "keptCount", assets.size(), "aiSkipped", true);
+        // ---- Layer 1: 请求去重列表 ----
+        List<Map<String, Object>> layer1 = new ArrayList<>();
+        for (ApiAsset a : assets) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("seq", a.getSequence());
+            item.put("method", a.getMethod());
+            item.put("url", a.getUrl());
+            item.put("status", a.getStatusCode());
+            item.put("domain", a.getDomain());
+            item.put("resource", a.getResource());
+            layer1.add(item);
         }
-        List<Integer> removeIndices = parseIndices(aiResponse);
 
-        apiCaptureService.applyAiFilter(removeIndices);
+        // ---- Layer 2: 接口分类 ----
+        Map<String, List<Map<String, Object>>> layer2 = new LinkedHashMap<>();
+        for (ApiAsset a : assets) {
+            String cat = a.getCategory() != null ? a.getCategory() : "unknown";
+            layer2.computeIfAbsent(cat, k -> new ArrayList<>());
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("method", a.getMethod());
+            item.put("url", a.getUrl());
+            item.put("resource", a.getResource());
+            layer2.get(cat).add(item);
+        }
+
+        // ---- Layer 3: 业务链路 AI 分析（触发式）----
+        Map<String, Object> layer3 = new LinkedHashMap<>();
         AiContext ctx = apiCaptureService.getAiContext();
+        if (ctx != null && ctx.isAnalyzeDone() && ctx.getFlowResult() != null) {
+            layer3 = ctx.getFlowResult();
+        } else {
+            layer3.put("status", "not_analyzed");
+            layer3.put("message", "请先调用 POST /capture/analyze 生成业务链路分析");
+        }
+
+        // ---- 分类统计 ----
+        Map<String, Integer> categorySummary = new LinkedHashMap<>();
+        for (ApiAsset a : assets) {
+            String cat = a.getCategory() != null ? a.getCategory() : "unknown";
+            categorySummary.merge(cat, 1, Integer::sum);
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("removed", ctx != null ? ctx.getRemovedDetails() : List.of());
-        result.put("removedCount", removeIndices.size());
-        result.put("keptCount", apiCaptureService.getLastResult().size());
-        result.put("filtered", apiCaptureService.getLastResult());
-
-        // 生成语义摘要供后续复用
-        if (ctx != null) {
-            ctx.setSemanticSummary(buildSemanticSummary(apiCaptureService.getLastResult()));
-        }
+        result.put("total", assets.size());
+        result.put("categorySummary", categorySummary);
+        result.put("layer1", layer1);
+        result.put("layer2", layer2);
+        result.put("layer3", layer3);
         return result;
     }
 
-    private String buildValidatePrompt(List<ApiAsset> assets) {
+    // ==================== 业务接口过滤 ====================
+
+    @GetMapping("/capture/business")
+    public Map<String, Object> businessApis() {
+        List<ApiAsset> assets = apiCaptureService.getLastResult();
+        if (assets == null || assets.isEmpty()) {
+            return Map.of("total", 0, "totalRaw", 0, "apis", List.of());
+        }
+
+        // 只保留 business + auth
+        String mainDomain = apiCaptureService.getMainDomain();
+        List<Map<String, Object>> apis = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+
+        for (ApiAsset a : assets) {
+            String cat = a.getCategory();
+            if (!"business".equals(cat) && !"auth".equals(cat)) continue;
+
+            // 去重：同一 method + resource 只保留一次
+            String dedupKey = a.getMethod() + " " + a.getResource();
+            if (!seen.add(dedupKey)) continue;
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("method", a.getMethod());
+            item.put("url", a.getUrl());
+            item.put("resource", a.getResource());
+            item.put("category", cat);
+            item.put("status", a.getStatusCode());
+            item.put("domain", a.getDomain());
+            item.put("scene", inferScene(a));
+            apis.add(item);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("totalRaw", assets.size());
+        result.put("total", apis.size());
+        result.put("mainDomain", mainDomain);
+        result.put("apis", apis);
+        return result;
+    }
+
+    /** 根据 URL 推断业务场景（按优先级从高到低匹配） */
+    private String inferScene(ApiAsset a) {
+        String url = a.getUrl();
+        String method = a.getMethod();
+        if (url == null) return "";
+        String lower = url.toLowerCase();
+
+        // ── 鉴权类 ──
+        if (lower.contains("login") || lower.contains("signin")) return "用户登录";
+        if (lower.contains("register") || lower.contains("signup")) return "用户注册";
+        if (lower.contains("logout") || lower.contains("signout")) return "退出登录";
+        if (lower.contains("captcha")) return "获取验证码";
+        if (lower.contains("token") || lower.contains("refresh")) return "刷新令牌";
+        if (lower.contains("verify") || lower.contains("reset")) return "验证身份";
+
+        // ── 搜索/查询 ──
+        if (lower.contains("search")) return "搜索内容";
+        if (lower.contains("list") || lower.contains("page") || lower.contains("feed")) return "查询列表";
+
+        // ── 用户信息 ──
+        if (lower.contains("profile") || lower.contains("avatar") || lower.contains("identity")) return "用户信息";
+
+        // ── 内容操作 ──
+        if (lower.contains("detail")) return "查看详情";
+        if (lower.contains("favorite") || lower.contains("like") || lower.contains("star") || lower.contains("collect")) return "收藏/点赞";
+        if (lower.contains("follow") || lower.contains("subscribe") || lower.contains("unfollow")) return "关注/订阅";
+        if (lower.contains("comment") || lower.contains("reply") || lower.contains("review")) return "评论/回复";
+        if (lower.contains("share")) return "分享内容";
+        if (lower.contains("create") || lower.contains("add") || lower.contains("new") || lower.contains("publish")) return "创建内容";
+        if (lower.contains("update") || lower.contains("edit") || lower.contains("modify") || lower.contains("change")) return "编辑内容";
+        if (lower.contains("delete") || lower.contains("remove") || lower.contains("cancel")) return "删除内容";
+        if (lower.contains("upload")) return "上传文件";
+        if (lower.contains("download") || lower.contains("export") || lower.contains("import")) return "导入/导出";
+
+        // ── 其他 ──
+        if (lower.contains("setting") || lower.contains("config")) return "系统设置";
+        if (lower.contains("notification") || lower.contains("notice") || lower.contains("message")) return "消息通知";
+        if (lower.contains("recommend") || lower.contains("suggest") || lower.contains("hot")) return "推荐内容";
+        if (lower.contains("report") || lower.contains("stat") || lower.contains("rank")) return "数据统计";
+
+        // ── 按 HTTP 方法推断 ──
+        if ("GET".equalsIgnoreCase(method)) return "查询数据";
+        if ("POST".equalsIgnoreCase(method)) return "提交数据";
+        if ("PUT".equalsIgnoreCase(method) || "PATCH".equalsIgnoreCase(method)) return "更新数据";
+        if ("DELETE".equalsIgnoreCase(method)) return "删除数据";
+
+        return "其他操作";
+    }
+
+    // ==================== AI 业务去重 ====================
+
+    @PostMapping("/capture/ai-dedup")
+    public Map<String, Object> aiDedup() {
+        List<ApiAsset> assets = apiCaptureService.getLastResult();
+        if (assets == null || assets.isEmpty()) {
+            return Map.of("total", 0, "apis", List.of());
+        }
+
+        String prompt = buildAiDedupPrompt(assets);
+        String aiResponse;
+        try {
+            aiResponse = aiChatService.chat("ai-dedup", prompt);
+        } catch (Exception e) {
+            log.warn("AI 去重调用失败: {}", e.getMessage());
+            return Map.of("total", 0, "error", "AI 服务不可用: " + e.getMessage());
+        }
+
+        List<Map<String, Object>> deduped = parseArrayJson(aiResponse);
+        if (deduped.isEmpty()) {
+            // AI 返回格式异常时，回退到按 resource 去重
+            return fallbackDedup(assets);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("total", deduped.size());
+        result.put("totalRaw", assets.size());
+        result.put("apis", deduped);
+        result.put("raw", aiResponse);
+        return result;
+    }
+
+    private String buildAiDedupPrompt(List<ApiAsset> assets) {
         StringBuilder sb = new StringBuilder();
-        sb.append("你是 API 流量分析专家。以下是浏览器录制的 HTTP 请求，已过第一层规则过滤（排除静态资源/CSS/JS/图片/埋点）。");
-        sb.append("请判断哪些请求不是真正的业务 API。基于以下规则判断：\n");
-        sb.append("- 第三方 CDN / 广告 / 热力图 / 监控 SDK 请求 → 无效\n");
-        sb.append("- 业务数据的 JSON 请求 → 有效\n");
-        sb.append("- 无法确定的灰名单请求 → 根据 URL 语义判断\n\n");
-        sb.append("只返回需要移除的请求序号 JSON 数组，如 [2,5,7]。\n\n");
+        sb.append("你正在分析用户在一次浏览器操作中产生的 API 调用列表。");
+        sb.append("同一个业务接口因为参数不同（如分页、不同用户ID）被调用了多次，请合并去重。\n\n");
+        sb.append("合并规则：\n");
+        sb.append("- 相同 method + 相同 resource path 的视为同一接口，只保留一个\n");
+        sb.append("- query 参数不同但 resource path 相同的接口合并（如 /api/list?page=1 和 /api/list?page=2 都是 /api/list）\n");
+        sb.append("- 路径参数不同的 RESTful 接口视为同一接口（如 /api/user/1 和 /api/user/2 都是 /api/user/{id}）\n");
+        sb.append("- 从 url 中提取有意义的 apiName（中文），如 /api/follow → \"关注用户\"\n\n");
+        sb.append("请返回 JSON 数组，每个元素格式：\n");
+        sb.append("{\n");
+        sb.append("  \"method\": \"POST\",\n");
+        sb.append("  \"resource\": \"/api/follow\",\n");
+        sb.append("  \"apiName\": \"关注用户\",\n");
+        sb.append("  \"urlExample\": \"http://xxx/api/follow\",\n");
+        sb.append("  \"callCount\": 3\n");
+        sb.append("}\n\n");
+        sb.append("只返回 JSON 数组，不要多余内容。\n\n");
+        sb.append("API 列表（按捕获顺序）：\n");
 
         for (int i = 0; i < assets.size(); i++) {
             ApiAsset a = assets.get(i);
             sb.append("[").append(i).append("] ")
                     .append(a.getMethod()).append(" ").append(a.getUrl())
                     .append(" status=").append(a.getStatusCode())
-                    .append(" domain=").append(a.getDomain())
                     .append(" resource=").append(a.getResource())
-                    .append(" tags=").append(a.getRuleTags());
-            Object body = a.getResponse().get("body");
-            if (body != null) {
-                String bodyStr = body.toString();
-                if (bodyStr.length() > 150) bodyStr = bodyStr.substring(0, 150) + "...";
-                sb.append(" preview=").append(bodyStr);
-            }
-            sb.append("\n");
+                    .append(" category=").append(a.getCategory())
+                    .append("\n");
         }
         return sb.toString();
+    }
+
+    /** AI 返回格式异常时的降级方案：按 method + resource 机械去重 */
+    private Map<String, Object> fallbackDedup(List<ApiAsset> assets) {
+        Map<String, ApiAsset> seen = new LinkedHashMap<>();
+        for (ApiAsset a : assets) {
+            String key = a.getMethod() + " " + (a.getResource() != null ? a.getResource() : a.getUrl());
+            seen.putIfAbsent(key, a);
+        }
+        List<Map<String, Object>> apis = new ArrayList<>();
+        for (ApiAsset a : seen.values()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("method", a.getMethod());
+            item.put("resource", a.getResource());
+            item.put("apiName", inferScene(a));
+            item.put("urlExample", a.getUrl());
+            apis.add(item);
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("total", apis.size());
+        result.put("totalRaw", assets.size());
+        result.put("apis", apis);
+        result.put("fallback", true);
+        return result;
     }
 
     // ==================== AI 业务链路分析 ====================
@@ -192,24 +437,26 @@ public class CaptureController {
             sb.append(semanticSummary).append("\n\n");
         }
 
+        sb.append("请分析这些 API 的顺序和逻辑关系，推断用户的操作场景（如：游客浏览帖子、用户登录、下单支付等）。\n");
         sb.append("请以 JSON 格式返回分析结果：\n");
         sb.append("{\n");
-        sb.append("  \"flowName\": \"业务流程名称（如：用户登录→浏览商品→下单→支付）\",\n");
+        sb.append("  \"scenario\": \"用户操作场景名称（如：游客浏览帖子、用户注册登录流程、下单支付流程等）\",\n");
         sb.append("  \"description\": \"整体流程的详细描述\",\n");
         sb.append("  \"steps\": [\n");
-        sb.append("    {\"step\": 1, \"action\": \"操作名称\", \"apis\": [\"/api/xxx\"], \"description\": \"该步骤说明\", \"intent\": \"查询|提交|更新|删除\"}\n");
+        sb.append("    {\"step\": 1, \"action\": \"操作名称（如：打开社区首页）\", \"api\": \"/api/xxx\", \"method\": \"GET\", \"description\": \"该步骤说明\", \"intent\": \"查询|提交|更新|删除\"}\n");
         sb.append("  ],\n");
         sb.append("  \"dataFlow\": [\n");
         sb.append("    {\"from\": \"源接口.response字段\", \"to\": \"目标接口.request字段\", \"value\": \"流转的数据含义\"}\n");
-        sb.append("  ],\n");
-        sb.append("  \"assets\": [\n");
-        sb.append("    {\"index\": 0, \"businessStep\": \"登录\", \"intent\": \"提交\", \"confidence\": 0.95}\n");
         sb.append("  ]\n");
         sb.append("}\n\n");
-        sb.append("assets 数组中为每个接口标注 businessStep、intent、confidence（0-1 浮点数），index 为输入中 [N] 的序号。\n");
-        sb.append("只返回 JSON，不要其他内容。\n\n");
+        sb.append("说明：\n");
+        sb.append("- scenario 描述整体场景（如「游客浏览帖子」）\n");
+        sb.append("- steps 数组按用户操作顺序排列，step从1开始递增\n");
+        sb.append("- api 和 method 来自下面列表中的实际接口\n");
+        sb.append("- intent 为接口的业务意图：查询(query)、提交(submit)、更新(update)、删除(delete)\n");
+        sb.append("- 只返回 JSON，不要多余内容\n\n");
 
-        sb.append("请求列表：\n");
+        sb.append("请求列表（按捕获顺序）：\n");
         for (int i = 0; i < assets.size(); i++) {
             ApiAsset a = assets.get(i);
             sb.append("[").append(i).append("] ")
@@ -217,10 +464,8 @@ public class CaptureController {
                     .append(" status=").append(a.getStatusCode())
                     .append(" domain=").append(a.getDomain())
                     .append(" resource=").append(a.getResource())
+                    .append(" category=").append(a.getCategory())
                     .append(" tags=").append(a.getRuleTags());
-            if (a.getFingerprint() != null && a.getMergedFrom() != null && !a.getMergedFrom().isEmpty()) {
-                sb.append(" mergedFrom=").append(a.getMergedFrom().size()).append("dups");
-            }
             Object reqBody = a.getRequest().get("body");
             if (reqBody != null) {
                 String s = reqBody.toString();
@@ -280,6 +525,7 @@ public class CaptureController {
         md.append("> 共 ").append(assets.size()).append(" 个接口\n\n---\n\n");
 
         Map<String, List<ApiAsset>> grouped = assets.stream()
+                .filter(a -> a.getDomain() != null)
                 .collect(Collectors.groupingBy(ApiAsset::getDomain,
                         LinkedHashMap::new, Collectors.toList()));
 
@@ -332,6 +578,83 @@ public class CaptureController {
         return ResponseEntity.ok(collection);
     }
 
+    /** Apifox 格式导出 — 轻量接口资产清单，可直接粘贴导入 Apifox */
+    @GetMapping("/capture/export/apifox")
+    public ResponseEntity<Map<String, Object>> exportApifox() {
+        List<ApiAsset> allAssets = apiCaptureService.getLastResult();
+        if (allAssets == null || allAssets.isEmpty()) {
+            return ResponseEntity.ok(Map.of("total", 0, "apis", List.of()));
+        }
+
+        // 只取 business + auth，去重
+        String mainDomain = apiCaptureService.getMainDomain();
+        Set<String> seen = new HashSet<>();
+        List<Map<String, Object>> apis = new ArrayList<>();
+
+        for (ApiAsset a : allAssets) {
+            String cat = a.getCategory();
+            if (!"business".equals(cat) && !"auth".equals(cat)) continue;
+            String dedupKey = a.getMethod() + " " + a.getResource();
+            if (!seen.add(dedupKey)) continue;
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("method", a.getMethod());
+            item.put("url", a.getUrl());
+            item.put("scene", inferScene(a));
+            apis.add(item);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("name", "API Assets - " + mainDomain);
+        result.put("total", apis.size());
+        result.put("apis", apis);
+        return ResponseEntity.ok(result);
+    }
+
+    /** Apifox 导出（AI 去重版）— 先用 AI 合并重复接口，再导出为 Apifox 格式 */
+    @PostMapping("/capture/export/apifox-dedup")
+    public ResponseEntity<Map<String, Object>> exportApifoxDedup() {
+        List<ApiAsset> assets = apiCaptureService.getLastResult();
+        if (assets == null || assets.isEmpty()) {
+            return ResponseEntity.ok(Map.of("total", 0, "apis", List.of()));
+        }
+
+        String prompt = buildAiDedupPrompt(assets);
+        String aiResponse;
+        try {
+            aiResponse = aiChatService.chat("ai-dedup-export", prompt);
+        } catch (Exception e) {
+            log.warn("AI 去重导出调用失败: {}", e.getMessage());
+            return ResponseEntity.ok(Map.of("total", 0, "error", "AI 服务不可用: " + e.getMessage()));
+        }
+
+        List<Map<String, Object>> deduped = parseArrayJson(aiResponse);
+        if (deduped.isEmpty()) {
+            // AI 失败时回退到机械去重
+            Map<String, ApiAsset> seen = new LinkedHashMap<>();
+            for (ApiAsset a : assets) {
+                String key = a.getMethod() + " " + (a.getResource() != null ? a.getResource() : a.getUrl());
+                seen.putIfAbsent(key, a);
+            }
+            for (ApiAsset a : seen.values()) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("method", a.getMethod());
+                item.put("url", a.getUrl());
+                item.put("apiName", inferScene(a));
+                deduped.add(item);
+            }
+        }
+
+        String mainDomain = apiCaptureService.getMainDomain();
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("name", "AI 去重导出 - " + mainDomain);
+        result.put("total", deduped.size());
+        result.put("totalRaw", assets.size());
+        result.put("apis", deduped);
+        result.put("exportFormat", "apifox");
+        return ResponseEntity.ok(result);
+    }
+
     private Map<String, Object> buildPostmanCollection(List<ApiAsset> assets) {
         Map<String, Object> collection = new LinkedHashMap<>();
 
@@ -353,6 +676,7 @@ public class CaptureController {
 
         // 按 domain 分组
         Map<String, List<ApiAsset>> grouped = assets.stream()
+                .filter(a -> a.getDomain() != null)
                 .collect(Collectors.groupingBy(ApiAsset::getDomain,
                         LinkedHashMap::new, Collectors.toList()));
 
@@ -610,21 +934,6 @@ public class CaptureController {
 
     // ==================== JSON 解析工具 ====================
 
-    private List<Integer> parseIndices(String aiResponse) {
-        List<Integer> result = new ArrayList<>();
-        try {
-            String json = cleanJson(aiResponse);
-            json = json.replaceAll("^[^\\[]*", "").replaceAll("[^\\]]*$", "");
-            List<?> list = objectMapper.readValue(json, List.class);
-            for (Object item : list) {
-                if (item instanceof Number) result.add(((Number) item).intValue());
-            }
-        } catch (Exception e) {
-            log.warn("解析 AI 返回索引失败: {}", aiResponse);
-        }
-        return result;
-    }
-
     private Map<String, Object> parseStructuredJson(String aiResponse) {
         try {
             String json = cleanJson(aiResponse);
@@ -657,23 +966,7 @@ public class CaptureController {
         return s;
     }
 
-    // ==================== 语义摘要构建 ====================
 
-    private String buildSemanticSummary(List<ApiAsset> assets) {
-        Map<String, List<String>> byDomain = new LinkedHashMap<>();
-        for (ApiAsset a : assets) {
-            byDomain.computeIfAbsent(a.getDomain(), k -> new ArrayList<>())
-                    .add(a.getMethod() + " " + a.getResource());
-        }
-        StringBuilder sb = new StringBuilder("API 资产概况: ");
-        sb.append(assets.size()).append(" 个接口，");
-        sb.append("分布在 ").append(byDomain.size()).append(" 个领域: ");
-        byDomain.forEach((domain, resources) ->
-                sb.append(domain).append("(").append(resources.size()).append(") "));
-        return sb.toString();
-    }
-
-    // ==================== 工具辅助方法 ====================
 
     private String toJson(Object obj) {
         try {

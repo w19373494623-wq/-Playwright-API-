@@ -89,7 +89,7 @@
         <!-- 工具栏 -->
         <div class="toolbar">
             <button class="btn btn-tool" onclick="loadStats()">📊 统计</button>
-            <button class="btn btn-ai" onclick="aiValidate()">🤖 AI 筛选</button>
+            <button class="btn btn-ai" onclick="aiValidate()">🎯 AI 去重</button>
             <button class="btn btn-ai" onclick="aiAnalyze()">🔗 链路分析</button>
             <button class="btn btn-tool" onclick="showDocs()">📄 接口文档</button>
             <button class="btn btn-export" onclick="exportPostman()">📋 Postman/Apifox</button>
@@ -281,24 +281,50 @@
         } catch (e) { console.error('stats error', e); }
     }
 
-    // ==================== AI 筛选 ====================
+    // ==================== AI 去重 ====================
 
     async function aiValidate() {
-        setStatus('active', '🤖 AI 正在分析哪些是无效请求...');
+        setStatus('active', '🤖 AI 正在去重...');
         try {
-            const res = await fetch('/capture/validate', { method: 'POST' });
+            const res = await fetch('/capture/ai-dedup', { method: 'POST' });
             const data = await res.json();
-            assets = data.filtered;
-            renderTable();
-            if (data.removedCount > 0) {
-                const urls = data.removed.map(r => r.url).join(', ');
-                setStatus('done', 'AI 移除了 ' + data.removedCount + ' 个无效请求：' + urls
-                    + ' <span class="ctx-badge ctx-shared">上下文已缓存</span>');
-            } else {
-                setStatus('done', 'AI 判断当前接口均为有效业务 API <span class="ctx-badge ctx-shared">上下文已缓存</span>');
+            const area = document.getElementById('analysisArea');
+            area.style.display = 'block';
+
+            let html = '<h3>🎯 AI 接口去重结果</h3>';
+            html += '<p style="color:#666;margin-bottom:12px;">原始 ' + data.totalRaw + ' 个 → 去重后 <strong>' + data.total + '</strong> 个</p>';
+
+            if (data.fallback) {
+                html += '<div style="padding:8px 12px;background:#fffbe6;border-radius:4px;margin-bottom:12px;font-size:13px;">'
+                    + '⚠️ AI 返回格式异常，已回退到机械去重（按 method + resource 合并）</div>';
             }
+
+            html += '<table class="result-table"><thead><tr>'
+                + '<th>#</th><th>方法</th><th>接口名称</th><th>Resource</th><th>调用次数</th><th>URL 示例</th>'
+                + '</tr></thead><tbody>';
+
+            (data.apis || []).forEach((a, i) => {
+                html += '<tr>'
+                    + '<td>' + (i + 1) + '</td>'
+                    + '<td><span class="method-badge method-' + a.method + '">' + a.method + '</span></td>'
+                    + '<td><strong>' + escapeHtml(a.apiName || '-') + '</strong></td>'
+                    + '<td><code>' + escapeHtml(a.resource || '-') + '</code></td>'
+                    + '<td>' + (a.callCount || 1) + '</td>'
+                    + '<td class="url-cell">' + escapeHtml(a.urlExample || '-') + '</td>'
+                    + '</tr>';
+            });
+
+            html += '</tbody></table>';
+
+            if (data.raw) {
+                html += '<details style="margin-top:12px;"><summary>AI 原始响应</summary>'
+                    + '<pre style="font-size:12px;">' + escapeHtml(data.raw) + '</pre></details>';
+            }
+
+            area.innerHTML = html;
+            setStatus('done', 'AI 去重完成：' + data.totalRaw + ' → ' + data.total + ' 个');
         } catch (e) {
-            setStatus('error', 'AI 筛选失败：' + e.message);
+            setStatus('error', 'AI 去重失败：' + e.message);
         }
     }
 
