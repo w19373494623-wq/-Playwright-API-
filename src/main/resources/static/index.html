@@ -350,41 +350,54 @@
 
     // ==================== AI 去重 ====================
 
+    let dedupData = { apis: [], totalRaw: 0, total: 0 };
+
     async function aiValidate() {
         try {
             const res = await fetch('/capture/ai-dedup', { method: 'POST' });
             const data = await res.json();
+            dedupData = data;
             const area = document.getElementById('dedupArea');
             area.style.display = 'block';
 
-            let html = '<h3>🎯 AI 接口去重结果</h3>';
-            html += '<p style="color:#666;margin-bottom:12px;">原始 ' + data.totalRaw + ' 个 → 去重后 <strong>' + data.total + '</strong> 个</p>';
+            let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
+            html += '<h3 style="margin:0;">🎯 去重后接口清单</h3>';
+            html += '<span style="font-size:14px;color:#666;">原始 ' + data.totalRaw + ' 个 → <strong style="color:#1677ff;">' + data.total + '</strong> 个</span>';
+            html += '</div>';
 
             if (data.fallback) {
-                html += '<div style="padding:8px 12px;background:#fffbe6;border-radius:4px;margin-bottom:12px;font-size:13px;">'
+                html += '<div style="padding:8px 12px;background:#fffbe6;border-radius:4px;margin-bottom:12px;font-size:13px;border:1px solid #ffe58f;">'
                     + '⚠️ AI 返回格式异常，已回退到机械去重（按 method + resource 合并）</div>';
             }
 
+            // 同主表一致的表格样式
+            html += '<div style="overflow-x:auto;">';
             html += '<table class="result-table"><thead><tr>'
-                + '<th>#</th><th>方法</th><th>接口名称</th><th>Resource</th><th>调用次数</th><th>URL 示例</th>'
+                + '<th>#</th><th>方法</th><th>URL</th><th>接口名称</th><th>Resource</th><th>调用次数</th>'
                 + '</tr></thead><tbody>';
 
             (data.apis || []).forEach((a, i) => {
-                html += '<tr>'
+                html += '<tr onclick="showDedupDetail(' + i + ')" style="cursor:pointer;">'
                     + '<td>' + (i + 1) + '</td>'
                     + '<td><span class="method-badge method-' + a.method + '">' + a.method + '</span></td>'
+                    + '<td class="url-cell">' + escapeHtml(a.urlExample || '-') + '</td>'
                     + '<td><strong>' + escapeHtml(a.apiName || '-') + '</strong></td>'
                     + '<td><code>' + escapeHtml(a.resource || '-') + '</code></td>'
-                    + '<td>' + (a.callCount || 1) + '</td>'
-                    + '<td class="url-cell">' + escapeHtml(a.urlExample || '-') + '</td>'
+                    + '<td>' + (a.callCount || 1) + ' 次</td>'
                     + '</tr>';
             });
 
             html += '</tbody></table>';
+            html += '</div>';
+
+            // 详情区
+            html += '<div class="detail-grid" id="dedupDetailArea" style="margin-top:12px;">';
+            html += '<div class="detail-block" style="grid-column:1/-1;color:#999;">点击上方条目查看详情</div>';
+            html += '</div>';
 
             if (data.raw) {
-                html += '<details style="margin-top:12px;"><summary>AI 原始响应</summary>'
-                    + '<pre style="font-size:12px;">' + escapeHtml(data.raw) + '</pre></details>';
+                html += '<details style="margin-top:12px;"><summary style="cursor:pointer;color:#666;font-size:13px;">AI 原始响应</summary>'
+                    + '<pre style="font-size:12px;background:#fff;padding:10px;border-radius:4px;max-height:200px;overflow:auto;">' + escapeHtml(data.raw) + '</pre></details>';
             }
 
             area.innerHTML = html;
@@ -392,6 +405,33 @@
         } catch (e) {
             setStatus('error', 'AI 去重失败：' + e.message);
         }
+    }
+
+    function showDedupDetail(index) {
+        const apis = dedupData.apis || [];
+        const a = apis[index];
+        if (!a) return;
+        const div = document.getElementById('dedupDetailArea');
+        if (!div) return;
+
+        let html = '';
+        html += '<div class="detail-block"><h4>📋 基本信息</h4>';
+        html += '<div style="font-size:12px;">'
+            + '接口名称: <strong>' + escapeHtml(a.apiName || '-') + '</strong><br>'
+            + '请求方法: <span class="method-badge method-' + a.method + '">' + a.method + '</span><br>'
+            + 'Resource: <code>' + escapeHtml(a.resource || '-') + '</code><br>'
+            + '调用次数: ' + (a.callCount || 1) + ' 次<br>'
+            + '</div></div>';
+
+        html += '<div class="detail-block"><h4>🔗 URL 示例</h4>';
+        html += '<pre style="word-break:break-all;white-space:pre-wrap;">' + escapeHtml(a.urlExample || '-') + '</pre></div>';
+
+        if (a.mergedUrls && a.mergedUrls.length > 0) {
+            html += '<div class="detail-block"><h4>📎 合并的 URL</h4>';
+            html += '<div style="font-size:12px;">' + a.mergedUrls.map(u => '<div><code>' + escapeHtml(u) + '</code></div>').join('') + '</div></div>';
+        }
+
+        div.innerHTML = html;
     }
 
     // ==================== 链路分析 ====================
