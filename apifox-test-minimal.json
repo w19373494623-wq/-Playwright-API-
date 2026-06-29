@@ -1,0 +1,15 @@
+{
+  "info": {
+    "name": "Test Minimal",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "测试接口",
+      "request": {
+        "method": "GET",
+        "url": "https://funhub-admin-test.guadd.fun/api/admin/ugc/contents?page=1"
+      }
+    }
+  ]
+}

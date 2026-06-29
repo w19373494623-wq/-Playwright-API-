@@ -41,6 +41,9 @@ public class CaptureController {
     private final DedupService dedupService;
     private final AiResultParser aiResultParser;
 
+    /** 最近一次 AI 去重结果，供导出使用 */
+    private DedupResult lastDedupResult;
+
     public CaptureController(ApiCaptureService apiCaptureService,
                              AiChatService aiChatService,
                              DedupService dedupService,
@@ -321,13 +324,13 @@ public class CaptureController {
         if (assets == null || assets.isEmpty()) {
             return Map.of("total", 0, "apis", List.of());
         }
-        DedupResult result = dedupService.dedup(assets);
+        lastDedupResult = dedupService.dedup(assets);
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("total", result.getTotal());
-        map.put("totalRaw", result.getTotalRaw());
-        map.put("apis", result.getApis());
-        if (result.getRawAiResponse() != null) map.put("raw", result.getRawAiResponse());
-        if (result.isFallback()) map.put("fallback", true);
+        map.put("total", lastDedupResult.getTotal());
+        map.put("totalRaw", lastDedupResult.getTotalRaw());
+        map.put("apis", lastDedupResult.getApis());
+        if (lastDedupResult.getRawAiResponse() != null) map.put("raw", lastDedupResult.getRawAiResponse());
+        if (lastDedupResult.isFallback()) map.put("fallback", true);
         return map;
     }
 
@@ -519,37 +522,176 @@ public class CaptureController {
         return ResponseEntity.ok(collection);
     }
 
-    /** Apifox 格式导出 — 轻量接口资产清单，可直接粘贴导入 Apifox */
+    /** Apifox 格式导出 — Postman Collection v2.1 格式，Apifox 原生支持导入 */
     @GetMapping("/capture/export/apifox")
     public ResponseEntity<Map<String, Object>> exportApifox() {
+        // 优先使用 AI 去重结果（如果有）
+        if (lastDedupResult != null && !lastDedupResult.getApis().isEmpty()) {
+            Map<String, Object> collection = buildApifoxCollectionFromDedup(
+                    apiCaptureService.getMainDomain(), lastDedupResult.getApis());
+            return ResponseEntity.ok(collection);
+        }
+
         List<ApiAsset> allAssets = apiCaptureService.getLastResult();
         if (allAssets == null || allAssets.isEmpty()) {
-            return ResponseEntity.ok(Map.of("total", 0, "apis", List.of()));
+            return ResponseEntity.ok(buildApifoxCollection(null, List.of()));
         }
 
-        // 只取 business + auth，去重
+        // 全部接口导出（不做 AI category 过滤，用户导入后再自行整理）
         String mainDomain = apiCaptureService.getMainDomain();
         Set<String> seen = new HashSet<>();
-        List<Map<String, Object>> apis = new ArrayList<>();
+        List<ApiAsset> exportAssets = new ArrayList<>();
 
         for (ApiAsset a : allAssets) {
-            String cat = a.getCategory();
-            if (!"business".equals(cat) && !"auth".equals(cat)) continue;
             String dedupKey = a.getMethod() + " " + a.getResource();
             if (!seen.add(dedupKey)) continue;
-
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("method", a.getMethod());
-            item.put("url", a.getUrl());
-            item.put("scene", inferScene(a));
-            apis.add(item);
+            exportAssets.add(a);
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("name", "API Assets - " + mainDomain);
-        result.put("total", apis.size());
-        result.put("apis", apis);
-        return ResponseEntity.ok(result);
+        Map<String, Object> collection = buildApifoxCollection(mainDomain, exportAssets);
+        return ResponseEntity.ok(collection);
+    }
+
+    /** 从 AI 去重结果构建 Apifox Collection */
+    private Map<String, Object> buildApifoxCollectionFromDedup(String mainDomain,
+                                                                List<Map<String, Object>> dedupApis) {
+        Map<String, Object> collection = new LinkedHashMap<>();
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("name", (mainDomain != null ? mainDomain : "API") + " - AI 去重导出");
+        info.put("schema", "https://schema.getpostman.com/json/collection/v2.1.0/collection.json");
+        collection.put("info", info);
+
+        // 按 domain 分组
+        Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
+        for (Map<String, Object> api : dedupApis) {
+            String url = (String) api.getOrDefault("urlExample", "");
+            String domain = extractHost(url);
+            if (domain == null) domain = "unknown";
+            grouped.computeIfAbsent(domain, k -> new ArrayList<>()).add(api);
+        }
+
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Map.Entry<String, List<Map<String, Object>>> entry : grouped.entrySet()) {
+            Map<String, Object> folder = new LinkedHashMap<>();
+            folder.put("name", entry.getKey());
+            List<Map<String, Object>> folderItems = new ArrayList<>();
+            for (Map<String, Object> dedupApi : entry.getValue()) {
+                folderItems.add(buildApifoxItemFromDedup(dedupApi));
+            }
+            folder.put("item", folderItems);
+            items.add(folder);
+        }
+        collection.put("item", items);
+        return collection;
+    }
+
+    /** 从 AI 去重单条记录构建 Postman 条目 */
+    private Map<String, Object> buildApifoxItemFromDedup(Map<String, Object> dedupApi) {
+        String method = (String) dedupApi.getOrDefault("method", "GET");
+        String urlExample = (String) dedupApi.getOrDefault("urlExample", "");
+        String resource = (String) dedupApi.getOrDefault("resource", "");
+
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("name", method + " " + resource);
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("method", method);
+        request.put("url", urlExample);
+
+        item.put("request", request);
+        // 不带 response，保持导出简洁
+        return item;
+    }
+
+    /** 构建 Apifox 兼容的 Postman Collection */
+    private Map<String, Object> buildApifoxCollection(String mainDomain,
+                                                       List<ApiAsset> assets) {
+        Map<String, Object> collection = new LinkedHashMap<>();
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("name", (mainDomain != null ? mainDomain : "API") + " - 业务接口");
+        info.put("schema", "https://schema.getpostman.com/json/collection/v2.1.0/collection.json");
+        collection.put("info", info);
+
+        // 按 domain 分组
+        Map<String, List<ApiAsset>> grouped = assets.stream()
+                .filter(a -> a.getDomain() != null)
+                .collect(Collectors.groupingBy(ApiAsset::getDomain,
+                        LinkedHashMap::new, Collectors.toList()));
+
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Map.Entry<String, List<ApiAsset>> entry : grouped.entrySet()) {
+            Map<String, Object> folder = new LinkedHashMap<>();
+            folder.put("name", entry.getKey());
+            folder.put("item", entry.getValue().stream()
+                    .map(a -> buildApifoxItem(a))
+                    .collect(Collectors.toList()));
+            items.add(folder);
+        }
+        collection.put("item", items);
+        return collection;
+    }
+
+    /** Apifox 条目 — 简化版，直接使用完整真实 URL 字符串 */
+    private Map<String, Object> buildApifoxItem(ApiAsset a) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("name", a.getMethod() + " " + (a.getResource() != null ? a.getResource() : getPath(a.getUrl())));
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("method", a.getMethod());
+
+        // Apifox 兼容: url 直接使用字符串格式（非对象格式），避免导入识别问题
+        request.put("url", a.getUrl());
+
+        // Headers（从 ApiAsset.getHeaders() 获取，而非 request map）
+        List<Map<String, String>> headerList = new ArrayList<>();
+        Map<String, String> headers = a.getHeaders();
+        if (headers != null) {
+            for (Map.Entry<String, String> h : headers.entrySet()) {
+                if ("host".equalsIgnoreCase(h.getKey())) continue;
+                Map<String, String> he = new LinkedHashMap<>();
+                he.put("key", h.getKey());
+                he.put("value", h.getValue());
+                headerList.add(he);
+            }
+        }
+        if (headerList.isEmpty()) {
+            headerList.add(Map.of("key", "Content-Type", "value", "application/json"));
+        }
+        request.put("header", headerList);
+
+        // Body
+        Object reqBody = a.getRequest().get("body");
+        if (reqBody != null && !reqBody.toString().isBlank() && !"null".equals(reqBody.toString())) {
+            Map<String, Object> bodyObj = new LinkedHashMap<>();
+            bodyObj.put("mode", "raw");
+            bodyObj.put("raw", formatBody(reqBody));
+            Map<String, Object> options = new LinkedHashMap<>();
+            options.put("raw", Map.of("language", "json"));
+            bodyObj.put("options", options);
+            request.put("body", bodyObj);
+        }
+
+        item.put("request", request);
+
+        // Response
+        List<Map<String, Object>> responses = new ArrayList<>();
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("name", "Response " + a.getStatusCode());
+        resp.put("code", a.getStatusCode());
+        resp.put("status", String.valueOf(a.getStatusCode()));
+        Object resBody = a.getResponse().get("body");
+        if (resBody != null && !resBody.toString().isBlank() && !"null".equals(resBody.toString())) {
+            Map<String, Object> bodyObj = new LinkedHashMap<>();
+            bodyObj.put("mode", "raw");
+            bodyObj.put("raw", formatBody(resBody));
+            resp.put("body", bodyObj);
+        }
+        responses.add(resp);
+        item.put("response", responses);
+
+        return item;
     }
 
     /** Apifox 导出（AI 去重版）— 先用 AI 合并重复接口，再导出为 Apifox 格式 */
@@ -587,9 +729,7 @@ public class CaptureController {
         if (!assets.isEmpty()) {
             varList.add(0, varEntry("baseUrl", extractBaseUrl(assets.get(0).getUrl())));
         }
-        Map<String, Object> varObj = new LinkedHashMap<>();
-        varObj.put("variable", varList);
-        collection.put("variable", varObj);
+        collection.put("variable", varList);
 
         // 按 domain 分组
         Map<String, List<ApiAsset>> grouped = assets.stream()

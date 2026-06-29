@@ -99,7 +99,8 @@
             <button class="btn btn-ai" onclick="loadScenarios()">🔗 业务场景</button>
             <button class="btn btn-ai" onclick="aiAnalyze()">📊 链路分析</button>
             <button class="btn btn-tool" onclick="showDocs()">📄 接口文档</button>
-            <button class="btn btn-export" onclick="exportPostman()">📋 Postman/Apifox</button>
+            <button class="btn btn-export" onclick="exportPostman()">📋 Postman</button>
+            <button class="btn btn-export" onclick="exportApifox()">📥 Apifox 导出</button>
             <button class="btn btn-ai" onclick="generateTestCases()">🧪 测试用例</button>
         </div>
 
@@ -354,7 +355,19 @@
 
     async function aiValidate() {
         try {
-            const res = await fetch('/capture/ai-dedup', { method: 'POST' });
+            // 30s 超时，避免 AI 调用挂起
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 30000);
+
+            const res = await fetch('/capture/ai-dedup', {
+                method: 'POST',
+                signal: controller.signal
+            });
+            clearTimeout(timeout);
+
+            if (!res.ok) {
+                throw new Error('服务器返回 ' + res.status + ' ' + res.statusText);
+            }
             const data = await res.json();
             dedupData = data;
             const area = document.getElementById('dedupArea');
@@ -367,7 +380,7 @@
 
             if (data.fallback) {
                 html += '<div style="padding:8px 12px;background:#fffbe6;border-radius:4px;margin-bottom:12px;font-size:13px;border:1px solid #ffe58f;">'
-                    + '⚠️ AI 返回格式异常，已回退到机械去重（按 method + resource 合并）</div>';
+                    + '⚠️ AI 结果不可用，已回退到机械去重</div>';
             }
 
             // 同主表一致的表格样式
@@ -401,7 +414,9 @@
             }
 
             area.innerHTML = html;
-            setStatus('done', 'AI 去重完成：' + data.totalRaw + ' → ' + data.total + ' 个');
+            // 标记导出按钮使用去重数据
+            document.querySelector('.btn-export[onclick*="exportApifox"]').textContent = '📥 导出（去重后）';
+            setStatus('done', 'AI 去重完成：' + data.totalRaw + ' → ' + data.total + ' 个，点击📥导出将使用去重结果');
         } catch (e) {
             setStatus('error', 'AI 去重失败：' + e.message);
         }
@@ -514,9 +529,31 @@
             const envVars = (json.variable && json.variable.variable) ? json.variable.variable : [];
             const varNames = envVars.map(v => v.key).join(', ');
             downloadBlob(JSON.stringify(json, null, 2), 'postman-collection.json', 'application/json');
-            setStatus('done', 'Postman/Apifox 集合已下载 🎯 环境变量: {{' + varNames + '}}');
+            setStatus('done', 'Postman 集合已下载 🎯 环境变量: {{' + varNames + '}}');
         } catch (e) {
             setStatus('error', '导出失败：' + e.message);
+        }
+    }
+
+    async function exportApifox() {
+        try {
+            const res = await fetch('/capture/export/apifox');
+            if (!res.ok) {
+                throw new Error('服务器返回 ' + res.status + ' ' + res.statusText);
+            }
+            const collection = await res.json();
+            const name = (collection.info && collection.info.name) ? collection.info.name : 'apifox-export';
+
+            // 判断是否是去重导出
+            const isDedup = name.indexOf('去重') >= 0;
+            downloadBlob(JSON.stringify(collection, null, 2), name + '.json', 'application/json');
+            if (isDedup) {
+                setStatus('done', 'AI 去重结果已导出 🎯 共 ' + (collection.item || []).reduce((sum, f) => sum + (f.item || []).length, 0) + ' 个接口');
+            } else {
+                setStatus('done', 'Apifox 导出完成<br>打开 Apifox → 导入 → Postman 格式 → 选择下载的文件');
+            }
+        } catch (e) {
+            setStatus('error', 'Apifox 导出失败：' + e.message);
         }
     }
 

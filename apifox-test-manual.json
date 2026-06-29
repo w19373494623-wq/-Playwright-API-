@@ -1,0 +1,66 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Test with ID",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "List contents",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"}
+        ],
+        "url": {
+          "raw": "https://funhub-admin-test.guadd.fun/api/admin/ugc/contents",
+          "protocol": "https",
+          "host": ["funhub-admin-test", "guadd", "fun"],
+          "path": ["api", "admin", "ugc", "contents"]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200
+        }
+      ]
+    },
+    {
+      "name": "Create comment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"content\":\"test\"}"
+        },
+        "url": {
+          "raw": "https://funhub-admin-test.guadd.fun/api/admin/ugc/comments",
+          "protocol": "https",
+          "host": ["funhub-admin-test", "guadd", "fun"],
+          "path": ["api", "admin", "ugc", "comments"]
+        }
+      }
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "url": "https://funhub-admin-test.guadd.fun/api/auth/login"
+      },
+      "response": []
+    },
+    {
+      "name": "URL as string",
+      "request": {
+        "method": "GET",
+        "url": "https://funhub-admin-test.guadd.fun/api/health"
+      },
+      "response": []
+    }
+  ]
+}

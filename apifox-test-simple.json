@@ -1,0 +1,49 @@
+{
+  "info": {
+    "name": "Test Simple",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "测试GET",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"}
+        ],
+        "url": {
+          "raw": "https://funhub-admin-test.guadd.fun/api/admin/ugc/contents",
+          "protocol": "https",
+          "host": ["funhub-admin-test", "guadd", "fun"],
+          "path": ["api", "admin", "ugc", "contents"]
+        }
+      },
+      "response": [
+        {
+          "name": "Response 200",
+          "code": 200,
+          "status": "OK"
+        }
+      ]
+    },
+    {
+      "name": "测试POST",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\":\"test\"}"
+        },
+        "url": {
+          "raw": "https://funhub-admin-test.guadd.fun/api/admin/ugc/comments",
+          "protocol": "https",
+          "host": ["funhub-admin-test", "guadd", "fun"],
+          "path": ["api", "admin", "ugc", "comments"]
+        }
+      }
+    }
+  ]
+}
