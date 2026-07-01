@@ -1,5 +1,6 @@
 package com.example.config;
 
+import com.example.service.AiAnalyzeService;
 import com.example.service.AiChatService;
 import com.example.tool.HttpTool;
 import com.example.tool.TimeTool;
@@ -27,6 +28,17 @@ public class AiConfig {
     @Bean
     public RestTemplate restTemplate() {
         return new RestTemplate();
+    }
+
+    @Bean
+    public AiAnalyzeService aiAnalyzeService() {
+        return AiServices.builder(AiAnalyzeService.class)
+                .chatModel(OpenAiChatModel.builder()
+                        .apiKey(apiKey)
+                        .baseUrl(baseUrl)
+                        .modelName(modelName)
+                        .build())
+                .build();
     }
 
     @Bean

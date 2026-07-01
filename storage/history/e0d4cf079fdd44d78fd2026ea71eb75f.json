@@ -1,0 +1,15 @@
+{
+  "id" : "e0d4cf079fdd44d78fd2026ea71eb75f",
+  "title" : "unknown - 2026-07-03 18:06",
+  "url" : null,
+  "mainDomain" : null,
+  "createdAt" : 1783073174532,
+  "duration" : 0,
+  "totalRaw" : 0,
+  "totalFiltered" : 0,
+  "apiCount" : 0,
+  "summary" : null,
+  "businessFlow" : null,
+  "apis" : [ ],
+  "envVars" : { }
+}

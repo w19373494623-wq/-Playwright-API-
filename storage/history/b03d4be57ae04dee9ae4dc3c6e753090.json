@@ -1,0 +1,182 @@
+{
+  "id" : "b03d4be57ae04dee9ae4dc3c6e753090",
+  "title" : "funhub-web-test.guadd.fun - 2026-07-03 11:25",
+  "url" : "https://funhub-web-test.guadd.fun/ugc",
+  "mainDomain" : "funhub-web-test.guadd.fun",
+  "createdAt" : 1783049114120,
+  "duration" : 280,
+  "totalRaw" : 41,
+  "totalFiltered" : 62,
+  "apiCount" : 28,
+  "summary" : null,
+  "businessFlow" : null,
+  "apis" : [ {
+    "method" : "POST",
+    "resource" : "/api/ugc/favoriteUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/favoriteUgc"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/unlikeUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/unlikeUgc"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/unfavoriteUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/unfavoriteUgc"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/likeUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/likeUgc"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/ugcDetail",
+    "category" : "business",
+    "callCount" : 4,
+    "apiName" : "GET /api/ugc/ugcDetail"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/ugcInfo/commentList",
+    "category" : "business",
+    "callCount" : 8,
+    "apiName" : "GET /api/ugc/ugcInfo/commentList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/selfPublish/ugcList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/selfPublish/ugcList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/selfLike/ugcList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/selfLike/ugcList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/viewUserInfo",
+    "category" : "business",
+    "callCount" : 2,
+    "apiName" : "GET /api/ugc/viewUserInfo"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/editUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/editUgc"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/points/balance",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/points/balance"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/ugcInfo/commentThread",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/ugcInfo/commentThread"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/ugcInfo/publishComment",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/ugcInfo/publishComment"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/likeComment",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/likeComment"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/userPublish/ugcList",
+    "category" : "business",
+    "callCount" : 2,
+    "apiName" : "GET /api/ugc/userPublish/ugcList"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/community/getUploadPresignedURL",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/community/getUploadPresignedURL"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/recommand/ugcList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/recommand/ugcList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/following/publishers/ugcList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/following/publishers/ugcList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/superTopic/list",
+    "category" : "business",
+    "callCount" : 2,
+    "apiName" : "GET /api/ugc/superTopic/list"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/createUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/createUgc"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/suggest",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/topic/suggest"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/unfollowUser",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/unfollowUser"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/followUser",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/followUser"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/membership/status",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/membership/status"
+  }, {
+    "method" : "POST",
+    "resource" : "/ugc/api/im/token/generate",
+    "category" : "auth",
+    "callCount" : 1,
+    "apiName" : "POST /ugc/api/im/token/generate"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/user/login",
+    "category" : "auth",
+    "callCount" : 1,
+    "apiName" : "POST /api/user/login"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/contentList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/topic/contentList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/hotList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/topic/hotList"
+  } ]
+}

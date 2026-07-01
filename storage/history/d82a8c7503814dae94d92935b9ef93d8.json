@@ -1,0 +1,15 @@
+{
+  "id" : "d82a8c7503814dae94d92935b9ef93d8",
+  "title" : "jsonplaceholder.typicode.com - 2026-07-15 12:39",
+  "url" : null,
+  "mainDomain" : "jsonplaceholder.typicode.com",
+  "createdAt" : 1784090392344,
+  "duration" : 7,
+  "totalRaw" : 0,
+  "totalFiltered" : 0,
+  "apiCount" : 0,
+  "summary" : null,
+  "businessFlow" : null,
+  "apis" : [ ],
+  "envVars" : { }
+}

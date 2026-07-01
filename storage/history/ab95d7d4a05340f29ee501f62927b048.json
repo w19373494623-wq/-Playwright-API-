@@ -1,0 +1,74 @@
+{
+  "id" : "ab95d7d4a05340f29ee501f62927b048",
+  "title" : "funhub-web-test.guadd.fun - 2026-07-02 12:24",
+  "url" : "https://funhub-web-test.guadd.fun/ugc",
+  "mainDomain" : "funhub-web-test.guadd.fun",
+  "createdAt" : 1782966251395,
+  "duration" : 92,
+  "totalRaw" : 11,
+  "totalFiltered" : 43,
+  "apiCount" : 10,
+  "summary" : null,
+  "businessFlow" : null,
+  "apis" : [ {
+    "method" : "GET",
+    "resource" : "/api/ugc/recommand/ugcList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/recommand/ugcList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/following/publishers/ugcList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/following/publishers/ugcList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/superTopic/list",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/superTopic/list"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/createUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/createUgc"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/contentList",
+    "category" : "business",
+    "callCount" : 2,
+    "apiName" : "GET /api/ugc/topic/contentList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/viewUserInfo",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/viewUserInfo"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/hotList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/topic/hotList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/membership/status",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/membership/status"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/unfollowUser",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/unfollowUser"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/followUser",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/followUser"
+  } ]
+}

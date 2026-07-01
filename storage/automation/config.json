@@ -1,0 +1,7 @@
+{
+  "authType" : "NONE",
+  "loginUrl" : "",
+  "username" : "",
+  "password" : "",
+  "tokenField" : "token"
+}

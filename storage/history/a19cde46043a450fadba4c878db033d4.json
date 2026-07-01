@@ -1,0 +1,321 @@
+{
+  "id" : "a19cde46043a450fadba4c878db033d4",
+  "title" : "funhub-web-test.guadd.fun - 2026-07-15 14:12",
+  "url" : "https://funhub-web-test.guadd.fun/ugc",
+  "mainDomain" : "funhub-web-test.guadd.fun",
+  "createdAt" : 1784095924913,
+  "duration" : 205,
+  "totalRaw" : 19,
+  "totalFiltered" : 44,
+  "apiCount" : 17,
+  "summary" : null,
+  "businessFlow" : null,
+  "apis" : [ {
+    "method" : "GET",
+    "resource" : "/api/ugc/recommand/ugcList",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/recommand/ugcList?cursor=&size=20",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/recommand/ugcList",
+    "requestBody" : null,
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Android\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?1",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/following/publishers/ugcList",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/following/publishers/ugcList?cursor=&size=20",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/following/publishers/ugcList",
+    "requestBody" : null,
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Android\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?1",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/superTopic/list",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/superTopic/list?keyword=&cursor=&size=4",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/superTopic/list",
+    "requestBody" : null,
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Android\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?1",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/createUgc",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/createUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/createUgc",
+    "requestBody" : "{\"ugcType\":\"text\",\"coverUrl\":\"\",\"title\":\"21343q41341234\",\"subtitle\":\"21343q41341234 #[蛋挞](st:6a4caf8703cf10814e0981ce) #[yyyy](st:6a50983a0f57e71ff8f10ace)\",\"tags\":[],\"imageList\":[],\"video\":null,\"topicIds\":[],\"newTopicNames\":[],\"superTopicId\":\"6a4caf8703cf10814e0981ce\",\"contentSubtype\":\"note\",\"isCompetitionEntry\":false,\"idempotencyKey\":\"ugc:890c6a3b-0ab5-44c6-9f4c-51cc913ed9ad\",\"visibility\":\"public\"}",
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Android\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?1",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/likeUgc",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/likeUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/likeUgc",
+    "requestBody" : "{\"ugcId\":\"6a5091b50f57e71ff8f10619\",\"ugc_id\":\"6a5091b50f57e71ff8f10619\"}",
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Android\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?1",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "POST",
+    "resource" : "/ugc/api/im/token/generate",
+    "url" : "https://test-base-api.guadd.fun/ugc/api/im/token/generate",
+    "category" : "auth",
+    "callCount" : 1,
+    "apiName" : "POST /ugc/api/im/token/generate",
+    "requestBody" : "{\"platform\":5}",
+    "headers" : {
+      "x-business-token" : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk",
+      "sec-ch-ua-platform" : "\"Android\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk",
+      "referer" : "https://funhub-web-test.guadd.fun/",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?1",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/unfavoriteUgc",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/unfavoriteUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/unfavoriteUgc",
+    "requestBody" : "{\"ugcId\":\"6a5091b50f57e71ff8f10619\"}",
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Android\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?1",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/viewUserInfo",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/viewUserInfo?target_user_id=6a2a1c1f7d8b5fad864dd959",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/viewUserInfo",
+    "requestBody" : null,
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Android\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?1",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/membership/status",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/membership/status",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/membership/status",
+    "requestBody" : null,
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Android\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?1",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/followUser",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/followUser",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/followUser",
+    "requestBody" : "{\"userId\":\"69ccef34e0c75376447b0549\"}",
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Android\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?1",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "POST",
+    "resource" : "/api/user/login",
+    "url" : "https://truss-api-test.guadd.fun/api/user/login",
+    "category" : "auth",
+    "callCount" : 1,
+    "apiName" : "POST /api/user/login",
+    "requestBody" : "{\"email\":\"19373494623@163.com\",\"password\":\"a0b7cda52e97cbbbef403ac8425b3e5f3bf9f9dd3a6cc1e992efe0c7e0911e04\"}",
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Android\"",
+      "x-user-id" : "6a5723b5ad2b047f25284ce1",
+      "x-device-id" : "95f8616d44a2c499d4120283fe5138b0",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "referer" : "https://funhub-web-test.guadd.fun/",
+      "sec-ch-ua-mobile" : "?1",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/hotList",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/topic/hotList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/topic/hotList",
+    "requestBody" : null,
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Android\"",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "user-agent" : "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "content-type" : "application/json",
+      "sec-ch-ua-mobile" : "?1"
+    }
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/contentList",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/topic/contentList?topicId=6a3b84027d36b14302d1538d&cursor=&size=10&sort=latest",
+    "category" : "business",
+    "callCount" : 2,
+    "apiName" : "GET /api/ugc/topic/contentList",
+    "requestBody" : null,
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Windows\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMjk2LCJuYmYiOjE3ODQwOTU4OTYsImlhdCI6MTc4NDA5NTg5Nn0.WQK2UhUYF8wrLAt-iMxeuwaUr1jHEyyjjPkHCDUp8iI",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?0",
+      "user-agent" : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/competition/list",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/competition/list?cursor=eyJ0IjoiMTIzIiwiaSI6IjZhMmY2MjQ4ZDExZDMzYzQ4YTUyZjdkOSJ9&size=10",
+    "category" : "business",
+    "callCount" : 2,
+    "apiName" : "GET /api/ugc/competition/list",
+    "requestBody" : null,
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Windows\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMjk2LCJuYmYiOjE3ODQwOTU4OTYsImlhdCI6MTc4NDA5NTg5Nn0.WQK2UhUYF8wrLAt-iMxeuwaUr1jHEyyjjPkHCDUp8iI",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?0",
+      "user-agent" : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/ugcInfo/commentList",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/ugcInfo/commentList?ugcId=6a5091b50f57e71ff8f10619&cursor=&size=20&parentCommentId=&sortType=latest",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/ugcInfo/commentList",
+    "requestBody" : null,
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Windows\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMjk2LCJuYmYiOjE3ODQwOTU4OTYsImlhdCI6MTc4NDA5NTg5Nn0.WQK2UhUYF8wrLAt-iMxeuwaUr1jHEyyjjPkHCDUp8iI",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?0",
+      "user-agent" : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/ugcInfo/publishComment",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/ugcInfo/publishComment",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/ugcInfo/publishComment",
+    "requestBody" : "{\"ugcId\":\"6a5091b50f57e71ff8f10619\",\"content\":\"adawd\",\"ip\":\"183.11.157.61\",\"episode\":\"\",\"albumId\":\"\",\"albumName\":\"\",\"source\":\"ugc\"}",
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Windows\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMjk2LCJuYmYiOjE3ODQwOTU4OTYsImlhdCI6MTc4NDA5NTg5Nn0.WQK2UhUYF8wrLAt-iMxeuwaUr1jHEyyjjPkHCDUp8iI",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?0",
+      "user-agent" : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "content-type" : "application/json"
+    }
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/ugcDetail",
+    "url" : "https://funhub-web-test.guadd.fun/api/ugc/ugcDetail?ugcId=6a5091b50f57e71ff8f10619",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/ugcDetail",
+    "requestBody" : null,
+    "headers" : {
+      "sec-ch-ua-platform" : "\"Windows\"",
+      "authorization" : "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMjk2LCJuYmYiOjE3ODQwOTU4OTYsImlhdCI6MTc4NDA5NTg5Nn0.WQK2UhUYF8wrLAt-iMxeuwaUr1jHEyyjjPkHCDUp8iI",
+      "x-user-id" : "6a2a1c1f7d8b5fad864dd959",
+      "referer" : "https://funhub-web-test.guadd.fun/ugc",
+      "sec-ch-ua" : "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+      "sec-ch-ua-mobile" : "?0",
+      "user-agent" : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "content-type" : "application/json"
+    }
+  } ],
+  "envVars" : {
+    "token" : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk"
+  }
+}

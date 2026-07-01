@@ -64,7 +64,12 @@ public class ClassifyFilter {
             if (ct != null) contentType = ct.toString().toLowerCase();
         } catch (Exception ignored) {}
 
-        // 1) 第三方资源：域名不同于主域名
+        // 1) 鉴权接口（优先判断，确保登录/注册不受域名影响）
+        for (String authPath : AUTH_PATHS) {
+            if (lower.contains(authPath)) return "auth";
+        }
+
+        // 2) 第三方资源：域名不同于主域名
         String domain = extractDomain(url);
         if (domain != null && !domain.isEmpty() && !domain.equals(mainDomain)) {
             if (!domain.startsWith("api.") && !domain.equals("localhost")) {
@@ -75,29 +80,24 @@ public class ClassifyFilter {
             }
         }
 
-        // 2) 监控上报
+        // 3) 监控上报
         for (String kw : MONITORING_PATHS) {
             if (lower.contains(kw)) return "monitoring";
         }
 
-        // 3) 静态资源（根据 content-type）
+        // 4) 静态资源（根据 content-type）
         if (!contentType.isEmpty()) {
             for (String imgCt : IMAGE_CONTENT_TYPES) {
                 if (contentType.contains(imgCt)) return "static";
             }
         }
 
-        // 4) 静态资源（根据后缀/目录）
+        // 5) 静态资源（根据后缀/目录）
         for (String suffix : STATIC_SUFFIXES) {
             if (lower.endsWith(suffix)) return "static";
         }
         for (String pattern : STATIC_PREFIX_PATTERNS) {
             if (lower.contains(pattern)) return "static";
-        }
-
-        // 5) 鉴权接口
-        for (String authPath : AUTH_PATHS) {
-            if (lower.contains(authPath)) return "auth";
         }
 
         // 6) 业务接口（默认）

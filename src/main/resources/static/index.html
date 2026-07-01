@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>API 录制工具</title>
+    <script type="module" src="js/app.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: system-ui, sans-serif; background: #f5f5f5; padding: 40px; }
@@ -14,20 +15,33 @@
         .input-row { display: flex; gap: 12px; margin-bottom: 16px; }
         .input-row input { flex: 1; padding: 10px 14px; font-size: 15px; border: 1px solid #ddd; border-radius: 6px; }
         .input-row input:focus { outline: none; border-color: #1677ff; }
-        .btn { padding: 8px 18px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; color: #fff; white-space: nowrap; }
+        .btn { padding: 8px 18px; font-size: 13px; border: none; border-radius: 6px; cursor: pointer; color: #fff; white-space: nowrap; font-weight: 500; transition: all 0.2s; }
+        .btn:hover { opacity: 0.85; transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+        .btn:active { transform: translateY(0); }
         .btn-start { background: #1677ff; }
         .btn-stop { background: #ff4d4f; }
-        .btn-tool { background: #666; font-size: 13px; }
-        .btn-tool:hover { opacity: 0.85; }
-        .btn-ai { background: #722ed1; }
-        .btn-export { background: #389e0d; }
-        .btn:disabled { background: #d9d9d9; cursor: not-allowed; }
-        .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-        .status { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; display: none; }
+        .btn-history { background: #8c8c8c; }
+        .btn:disabled { background: #d9d9d9 !important; cursor: not-allowed; opacity: 0.6; transform: none; box-shadow: none; }
+        /* 工具栏按钮 - 每个功能独立颜色 */
+        .toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f0f0f0; }
+        .tb-btn { padding: 7px 14px; font-size: 13px; border: 1px solid #e0e0e0; border-radius: 6px; cursor: pointer; background: #fff; color: #555; white-space: nowrap; transition: all 0.2s; font-weight: 500; }
+        .tb-btn:hover { color: #1677ff; border-color: #1677ff; background: #f0f5ff; transform: translateY(-1px); }
+        .tb-btn.active { color: #fff; border-color: transparent; }
+        .tb-btn.tb-stats.active { background: #389e0d; border-color: #389e0d; }
+        .tb-btn.tb-dedup.active { background: #722ed1; border-color: #722ed1; }
+        .tb-btn.tb-scenario.active { background: #1677ff; border-color: #1677ff; }
+        .tb-btn.tb-docs.active { background: #d48806; border-color: #d48806; }
+        .tb-btn.tb-export.active { background: #389e0d; border-color: #389e0d; }
+        .tb-btn.tb-smoke.active { background: #eb2f96; border-color: #eb2f96; }
+        .tb-btn .icon { margin-right: 4px; }
+        .status { padding: 10px 16px; border-radius: 6px; margin-bottom: 12px; display: none; font-size: 13px; }
         .status.active { display: block; background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; }
         .status.done { display: block; background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
         .status.error { display: block; background: #fff2f0; color: #cf1322; border: 1px solid #ffa39e; }
-        .stats-bar { display: flex; gap: 16px; margin-bottom: 16px; padding: 12px 16px; background: #fafafa; border-radius: 6px; font-size: 14px; flex-wrap: wrap; align-items: center; }
+        /* 内容面板切换 */
+        .content-panel { display: none; }
+        .content-panel.active { display: block; }
+        .stats-bar { display: flex; gap: 16px; padding: 12px 16px; background: #fafafa; border-radius: 6px; font-size: 14px; flex-wrap: wrap; align-items: center; }
         .stat-ok { background: #f6ffed; color: #389e0d; padding: 2px 10px; border-radius: 4px; }
         .stat-err { background: #fff2f0; color: #cf1322; padding: 2px 10px; border-radius: 4px; }
         .stat-redirect { background: #fffbe6; color: #d48806; padding: 2px 10px; border-radius: 4px; }
@@ -111,9 +125,9 @@
     <div class="card">
         <div class="input-row">
             <input type="text" id="urlInput" placeholder="输入要访问的网址" value="https://jsonplaceholder.typicode.com">
-            <button class="btn btn-start" id="startBtn" onclick="startCapture()">开始录制</button>
-            <button class="btn btn-stop" id="stopBtn" onclick="stopCapture()" disabled>停止录制</button>
-            <button class="btn btn-tool" onclick="toggleHistoryPanel()" style="background:#8c8c8c;">📁 录制历史</button>
+            <button class="btn btn-start" id="startBtn">开始录制</button>
+            <button class="btn btn-stop" id="stopBtn" disabled>停止录制</button>
+            <button class="btn btn-history" id="historyToggleBtn">📁 录制历史</button>
         </div>
         <div class="rec-status" id="recStatus"></div>
         <div class="status" id="status"></div>
@@ -125,24 +139,25 @@
     </div>
 
     <div class="card" id="resultCard" style="display:none;">
-        <!-- 工具栏 -->
-        <div class="toolbar">
-            <button class="btn btn-tool" onclick="loadStats()">📊 统计</button>
-            <button class="btn btn-ai" onclick="aiValidate()">🎯 AI 去重</button>
-            <button class="btn btn-ai" onclick="loadScenarios()">🔗 业务场景</button>
-            <button class="btn btn-ai" onclick="aiAnalyze()">📊 链路分析</button>
-            <button class="btn btn-tool" onclick="showDocs()">📄 接口文档</button>
-            <button class="btn btn-export" onclick="exportPostman()">📋 Postman</button>
-            <button class="btn btn-export" onclick="exportApifox()">📥 Apifox 导出</button>
-            <button class="btn btn-ai" onclick="generateTestCases()">🧪 测试用例</button>
+        <!-- 环境变量栏 -->
+        <div id="envVarBar" style="display:none;margin-bottom:12px;padding:12px 16px;background:#f6ffed;border:1px solid #b7eb8f;border-radius:6px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <span style="font-weight:600;font-size:14px;color:#389e0d;">🌐 环境变量</span>
+                <button class="tb-btn" id="envVarEditBtn" style="font-size:12px;padding:3px 10px;">编辑</button>
+            </div>
+            <div id="envVarList" style="display:flex;flex-wrap:wrap;gap:8px;font-size:13px;"></div>
+            <div id="tokenStatus" style="font-size:12px;color:#666;margin-top:6px;"></div>
         </div>
 
-        <!-- 统计条 -->
-        <div class="stats-bar" id="statsBar" style="display:none;"></div>
-
-        <!-- AI 分析/去重结果区（放在表格上方，无需滚动查看） -->
-        <div class="analysis-card" id="dedupArea" style="display:none;"></div>
-        <div class="analysis-card" id="analysisArea" style="display:none;"></div>
+        <!-- 工具栏 -->
+        <div class="toolbar">
+            <button class="tb-btn tb-stats" onclick="switchTo('stats')"><span class="icon">📊</span>统计</button>
+            <button class="tb-btn tb-dedup" onclick="switchTo('dedup')"><span class="icon">🎯</span>AI 去重</button>
+            <button class="tb-btn tb-scenario" onclick="switchTo('scenario')"><span class="icon">🔗</span>业务场景</button>
+            <button class="tb-btn tb-docs" onclick="switchTo('docs')"><span class="icon">📄</span>接口文档</button>
+            <button class="tb-btn tb-export" onclick="switchTo('export')"><span class="icon">📥</span>Apifox 导出</button>
+            <button class="tb-btn tb-smoke" onclick="switchTo('smoke')"><span class="icon">🚀</span>烟雾测试</button>
+        </div>
 
         <!-- 加载中遮罩 -->
         <div id="loadingOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:999;justify-content:center;align-items:flex-start;padding-top:200px;">
@@ -152,725 +167,305 @@
             </div>
         </div>
 
-        <!-- 表格 -->
-        <div style="overflow-x:auto;">
-            <table class="result-table">
-                <thead>
-                    <tr>
-                        <th>#</th><th>方法</th><th>URL</th><th>状态</th>
-                        <th>领域</th><th>资源</th><th>Step</th><th>置信度</th>
-                    </tr>
-                </thead>
-                <tbody id="resultBody"></tbody>
-            </table>
+        <!-- 默认视图：接口列表 -->
+        <div class="content-panel active" id="panel-table">
+            <div class="stats-bar" id="statsBar" style="display:none;"></div>
+            <div style="overflow-x:auto;">
+                <table class="result-table">
+                    <thead>
+                        <tr>
+                            <th>#</th><th>方法</th><th>URL</th><th>状态</th>
+                            <th>领域</th><th>资源</th><th>Step</th><th>置信度</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultBody"></tbody>
+                </table>
+            </div>
+            <div class="detail-grid" id="detailArea" style="margin-top:12px;">
+                <div class="detail-block" style="grid-column:1/-1;">选中一条请求查看详情</div>
+            </div>
         </div>
 
-        <!-- 详情 -->
-        <div class="detail-grid" id="detailArea" style="margin-top:12px;">
-            <div class="detail-block" style="grid-column:1/-1;">选中一条请求查看详情</div>
-        </div>
+        <!-- 功能面板：统计 -->
+        <div class="content-panel" id="panel-stats"></div>
+
+        <!-- 功能面板：AI 去重 -->
+        <div class="content-panel" id="panel-dedup"></div>
+
+        <!-- 功能面板：业务场景 / 分析 -->
+        <div class="content-panel" id="panel-scenario"></div>
+
+        <!-- 功能面板：接口文档 -->
+        <div class="content-panel" id="panel-docs"></div>
+
+        <!-- 功能面板：导出 -->
+        <div class="content-panel" id="panel-export"></div>
+
+        <!-- 功能面板：烟雾测试 -->
+        <div class="content-panel" id="panel-smoke"></div>
     </div>
 </div>
 
 <!-- history panel -->
-<div class="history-backdrop" id="historyBackdrop" onclick="closeHistoryPanel()"></div>
+<div class="history-backdrop" id="historyBackdrop"></div>
 <div class="history-sidebar" id="historySidebar">
     <div class="header">
         <h2>📁 录制历史</h2>
-        <button class="close-btn" onclick="closeHistoryPanel()">&times;</button>
+        <button class="close-btn">&times;</button>
     </div>
     <div class="list-area" id="historyList">
         <div class="history-loading">加载中...</div>
     </div>
 </div>
 
+<!-- fallback: 如果 ES Module 加载失败或报错，直接绑定核心按钮 -->
 <script>
-    let assets = [];
-    let recTimer = null;
-    let recStartTime = null;
-    let recRawCount = 0;
+  window.addEventListener('DOMContentLoaded', function() {
+    var checkLimit = performance.now() + 3000;
+    var readyCheck = setInterval(function() {
+      if (document.documentElement.dataset.appReady === 'true') {
+        clearInterval(readyCheck);
+        return;
+      }
+      if (performance.now() > checkLimit) {
+        clearInterval(readyCheck);
+        console.warn('[Fallback] ES Module 未就绪，使用内联 fallback');
+        window.__fallbackActive = true;
 
-    async function startCapture() {
-        const url = document.getElementById('urlInput').value.trim();
-        if (!url) { alert('请输入网址'); return; }
-        setStatus('active', '浏览器正在打开，请等待...');
-        document.getElementById('startBtn').disabled = true;
-        document.getElementById('stopBtn').disabled = false;
-        document.getElementById('resultCard').style.display = 'none';
-        assets = [];
-        try {
-            await fetch('/capture/start?url=' + encodeURIComponent(url), { method: 'POST' });
-            setStatus('active', '浏览器已打开，请在打开的浏览器窗口中操作页面');
-            document.getElementById('stepTip').innerHTML = '<strong>正在录制中...</strong> 操作完成后点击下方「停止录制」';
-            startRecTimer();
-        } catch (e) {
-            setStatus('error', '启动失败：' + e.message);
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = true;
-        }
-    }
+        var startBtn = document.getElementById('startBtn');
+        var stopBtn = document.getElementById('stopBtn');
+        var historyBtn = document.getElementById('historyToggleBtn');
 
-    async function stopCapture() {
-        setStatus('active', '正在停止录制...');
-        document.getElementById('stopBtn').disabled = true;
-        try {
-            const res = await fetch('/capture/stop', { method: 'POST' });
-            assets = await res.json();
-            renderTable();
-            stopRecTimer();
-            setStatus('done', '录制完成，共 ' + assets.length + ' 个接口（已指纹合并去重）');
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('analysisArea').style.display = 'none';
-            document.getElementById('dedupArea').style.display = 'none';
-            // 恢复操作提示
-            document.getElementById('stepTip').innerHTML =
-                '<strong>使用步骤：</strong><br>'
-                + '① 输入网址 → ② 点击「开始录制」→ ③ 在打开的浏览器中操作页面<br>'
-                + '④ 操作完成后点击「停止录制」→ ⑤ 使用下方工具栏分析/导出';
-        } catch (e) {
-            setStatus('error', '停止失败：' + e.message);
-            document.getElementById('stopBtn').disabled = false;
-        }
-    }
+        if (startBtn) startBtn.onclick = function() {
+          var url = document.getElementById('urlInput').value.trim();
+          if (!url) { alert('请输入网址'); return; }
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+          fetch('/capture/start?url=' + encodeURIComponent(url), {
+            method: 'POST'
+          }).then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+          }).then(function() {
+              var st = document.getElementById('status');
+              if (st) { st.className = 'status active'; st.innerHTML = '浏览器已打开，请在打开的浏览器窗口中操作页面'; }
+              var tip = document.getElementById('stepTip');
+              if (tip) tip.innerHTML = '<strong>正在录制中...</strong> 操作完成后点击下方「停止录制」';
+            })
+            .catch(function(e) {
+              startBtn.disabled = false;
+              stopBtn.disabled = true;
+              alert('启动失败: ' + e.message);
+            });
+        };
 
-    function renderTable() {
-        document.getElementById('resultCard').style.display = 'block';
-        const tbody = document.getElementById('resultBody');
-        tbody.innerHTML = '';
+        if (stopBtn) stopBtn.onclick = function() {
+          stopBtn.disabled = true;
+          var st = document.getElementById('status');
+          if (st) { st.className = 'status active'; st.innerHTML = '正在停止录制...'; }
+          fetch('/capture/stop', { method: 'POST' })
+            .then(function(r) {
+              if (!r.ok) throw new Error('HTTP ' + r.status);
+              return r.json();
+            })
+            .then(function(data) {
+              var assets = data.assets || [];
+              window.renderFallbackTable(assets);
+              if (st) { st.className = 'status done'; st.innerHTML = '录制完成，共 ' + assets.length + ' 个接口'; }
+              if (startBtn) startBtn.disabled = false;
+              var tip = document.getElementById('stepTip');
+              if (tip) tip.innerHTML = '<strong>使用步骤：</strong><br>① 输入网址 → ② 点击「开始录制」→ ③ 在打开的浏览器中操作页面<br>④ 操作完成后点击「停止录制」→ ⑤ 使用下方工具栏分析/导出';
+            })
+            .catch(function(e) {
+              if (st) { st.className = 'status error'; st.innerHTML = '停止失败: ' + e.message; }
+              stopBtn.disabled = false;
+            });
+        };
 
-        assets.forEach((a, i) => {
-            const tr = document.createElement('tr');
-            tr.onclick = () => showDetail(i);
+        // ====== 渲染表格 ======
+        window.__fallbackAssets = [];
+        window.showFallbackDetail = function(index) {
+          var a = window.__fallbackAssets[index];
+          if (!a) return;
+          var div = document.getElementById('detailArea');
+          if (!div) return;
+          function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+          function sj(d) { if (!d) return '-'; try { return esc(typeof d==='object'?JSON.stringify(d,null,2):JSON.stringify(JSON.parse(d),null,2)); } catch(e) { return esc(String(d)); } }
+          var tags = (a.ruleTags||[]).map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join(' ');
+          div.innerHTML = '<div class="detail-block"><h4>📋 原始层</h4><div style="font-size:12px;color:#666;">Session: '+(a.sessionId||'-')+' | 序号: '+(a.sequenceNumber||(index+1))+' | 时间: '+new Date(a.timestamp).toLocaleTimeString()+'</div></div>'
+            + '<div class="detail-block"><h4>🔧 规则层</h4><div style="font-size:12px;">domain: <strong>'+esc(a.domain||'-')+'</strong> | resource: <strong>'+esc(a.resource||'-')+'</strong> | fingerprint: <code>'+esc(a.fingerprint||'-')+'</code> | tags: '+tags+'</div></div>'
+            + '<div class="detail-block"><h4>🤖 AI 层</h4><div style="font-size:12px;">businessStep: <strong>'+esc(a.businessStep||'<span style="color:#999;">未分析</span>')+'</strong> | intent: <strong>'+esc(a.intent||'<span style="color:#999;">未分析</span>')+'</strong></div></div>'
+            + '<div class="detail-block"><h4>请求头</h4><pre>'+sj(a.request&&a.request.headers)+'</pre></div>'
+            + '<div class="detail-block"><h4>请求体</h4><pre>'+sj(a.request&&a.request.body)+'</pre></div>'
+            + '<div class="detail-block"><h4>响应头</h4><pre>'+sj(a.response&&a.response.headers)+'</pre></div>'
+            + '<div class="detail-block"><h4>响应体</h4><pre>'+sj(a.response&&a.response.body)+'</pre></div>';
+        };
 
-            let mergeLabel = '';
-            if (a.mergedFrom && a.mergedFrom.length > 0) {
-                mergeLabel = ' <span class="merged-badge">+' + a.mergedFrom.length + '</span>';
-            }
-
-            let confHtml = '-';
+        window.renderFallbackTable = function(assets) {
+          window.__fallbackAssets = assets || [];
+          var card = document.getElementById('resultCard');
+          if (card) card.style.display = assets && assets.length > 0 ? 'block' : 'none';
+          var tbody = document.getElementById('resultBody');
+          if (!tbody) return;
+          tbody.innerHTML = '';
+          if (!assets || assets.length === 0) return;
+          assets.forEach(function(a, i) {
+            var tr = document.createElement('tr');
+            tr.onclick = function() { window.showFallbackDetail(i); };
+            var mergeLabel = (a.mergedFrom && a.mergedFrom.length > 0) ? ' <span class="merged-badge">+'+a.mergedFrom.length+'</span>' : '';
+            var confHtml = '-';
             if (a.confidence != null) {
-                const pct = Math.round(a.confidence * 100);
-                confHtml = pct + '%<span class="conf-bg"><span class="conf-bar" style="width:' + pct + 'px;"></span></span>';
+              var pct = Math.round(a.confidence * 100);
+              confHtml = pct + '%<span class="conf-bg"><span class="conf-bar" style="width:'+pct+'px;"></span></span>';
             }
-
-            let tagsHtml = '';
-            if (a.ruleTags && a.ruleTags.length) {
-                tagsHtml = a.ruleTags.map(t => '<span class="tag">' + t + '</span>').join('');
-            }
-
-            tr.innerHTML = `
-                <td>${i + 1}${mergeLabel}</td>
-                <td><span class="method-badge method-${a.method}">${a.method}</span></td>
-                <td class="url-cell">${a.url}</td>
-                <td>${a.statusCode}</td>
-                <td>${a.domain || '-'}</td>
-                <td>${a.resource || '-'} ${tagsHtml}</td>
-                <td>${a.businessStep || '-'}</td>
-                <td>${confHtml}</td>
-            `;
+            var tagsHtml = (a.ruleTags && a.ruleTags.length) ? a.ruleTags.map(function(t){return '<span class="tag">'+t+'</span>';}).join('') : '';
+            tr.innerHTML = '<td>'+(i+1)+mergeLabel+'</td><td><span class="method-badge method-'+a.method+'">'+a.method+'</span></td><td class="url-cell">'+a.url+'</td><td>'+a.statusCode+'</td><td>'+(a.domain||'-')+'</td><td>'+(a.resource||'-')+' '+tagsHtml+'</td><td>'+(a.businessStep||'-')+'</td><td>'+confHtml+'</td>';
             tbody.appendChild(tr);
-        });
+          });
+          if (assets.length > 0) window.showFallbackDetail(0);
+        };
 
-        if (assets.length > 0) showDetail(0);
-        loadStats();
-    }
+        // 历史面板关闭：点击 backdrop 或 × 按钮
+        var histCloseBtn = document.querySelector('#historySidebar .close-btn');
+        var histBackdrop = document.getElementById('historyBackdrop');
+        window.closeFallbackHistory = function() {
+          var sidebar = document.getElementById('historySidebar');
+          var backdrop = document.getElementById('historyBackdrop');
+          if (sidebar) sidebar.classList.remove('open');
+          if (backdrop) backdrop.classList.remove('open');
+        };
+        if (histCloseBtn) histCloseBtn.onclick = window.closeFallbackHistory;
+        if (histBackdrop) histBackdrop.onclick = window.closeFallbackHistory;
 
-    function showDetail(index) {
-        const a = assets[index];
-        const div = document.getElementById('detailArea');
+        if (historyBtn) historyBtn.onclick = function() {
+          var sidebar = document.getElementById('historySidebar');
+          var backdrop = document.getElementById('historyBackdrop');
+          var isOpen = sidebar && sidebar.classList.contains('open');
+          if (sidebar) sidebar.classList.toggle('open');
+          if (backdrop) backdrop.classList.toggle('open');
+          if (!isOpen) loadFallbackHistory();
+        };
 
-        let html = '';
-        // 原始层
-        html += '<div class="detail-block"><h4>📋 原始层</h4>';
-        html += '<div style="font-size:12px;color:#666;">'
-            + 'Session: ' + (a.sessionId || '-') + ' | 序号: ' + (a.sequenceNumber || index+1)
-            + ' | 时间: ' + new Date(a.timestamp).toLocaleTimeString()
-            + '</div></div>';
+        window.h = function(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
 
-        // 规则层
-        html += '<div class="detail-block"><h4>🔧 规则层</h4>';
-        html += '<div style="font-size:12px;">'
-            + 'domain: <strong>' + (a.domain || '-') + '</strong>'
-            + ' | resource: <strong>' + (a.resource || '-') + '</strong>'
-            + ' | fingerprint: <code>' + (a.fingerprint || '-') + '</code>'
-            + ' | tags: ' + (a.ruleTags || []).map(t => '<span class="tag">'+t+'</span>').join(' ');
-        if (a.mergedFrom && a.mergedFrom.length > 0) {
-            html += '<br>合并: ' + a.mergedFrom.map(u => '<code>'+u+'</code>').join(', ');
-        }
-        html += '</div></div>';
-
-        // AI 层
-        html += '<div class="detail-block"><h4>🤖 AI 层</h4>';
-        html += '<div style="font-size:12px;">'
-            + 'businessStep: <strong>' + (a.businessStep || '<span style="color:#999;">未分析</span>') + '</strong>'
-            + ' | intent: <strong>' + (a.intent || '<span style="color:#999;">未分析</span>') + '</strong>'
-            + ' | confidence: ';
-        if (a.confidence != null) {
-            html += '<strong>' + Math.round(a.confidence * 100) + '%</strong>';
-        } else {
-            html += '<span style="color:#999;">未分析</span>';
-        }
-        html += '</div></div>';
-
-        // 请求/响应内容
-        html += '<div class="detail-block"><h4>请求头</h4><pre>' + safeJson(a.request?.headers) + '</pre></div>';
-        html += '<div class="detail-block"><h4>请求体</h4><pre>' + safeJson(a.request?.body) + '</pre></div>';
-        html += '<div class="detail-block"><h4>响应头</h4><pre>' + safeJson(a.response?.headers) + '</pre></div>';
-        html += '<div class="detail-block"><h4>响应体</h4><pre>' + safeJson(a.response?.body) + '</pre></div>';
-
-        div.innerHTML = html;
-    }
-
-    function safeJson(data) {
-        if (!data) return '-';
-        try {
-            if (typeof data === 'object') return escapeHtml(JSON.stringify(data, null, 2));
-            return escapeHtml(JSON.stringify(JSON.parse(data), null, 2));
-        } catch (e) {
-            return escapeHtml(String(data));
-        }
-    }
-
-    // ==================== 统计 ====================
-
-    async function loadStats() {
-        if (!assets.length) return;
-        try {
-            const res = await fetch('/capture/stats');
-            const stats = await res.json();
-            const bar = document.getElementById('statsBar');
-            bar.style.display = 'flex';
-            let html = '';
-            if (stats.success > 0) html += '<span class="stat-ok">✅ ' + stats.success + ' 成功</span>';
-            if (stats.redirect > 0) html += '<span class="stat-redirect">↪ ' + stats.redirect + ' 重定向</span>';
-            if (stats.clientError > 0) html += '<span class="stat-err">⚠ ' + stats.clientError + ' 客户端错误</span>';
-            if (stats.serverError > 0) html += '<span class="stat-err">❌ ' + stats.serverError + ' 服务端错误</span>';
-            html += '<span class="stat-muted">共 ' + stats.total + ' 个</span>';
-            if (stats.byDomain) {
-                const domains = Object.entries(stats.byDomain).map(([k,v]) => k+':'+v).join(', ');
-                html += '<span class="stat-muted">| 领域: ' + domains + '</span>';
-            }
-            bar.innerHTML = html;
-        } catch (e) { console.error('stats error', e); }
-    }
-
-    // ==================== 业务场景链路 ====================
-
-    async function loadScenarios() {
-        showLoading(true, '🔗 正在识别业务场景...');
-        try {
-            const res = await fetch('/capture/scenarios', { method: 'POST' });
-            const data = await res.json();
-            const area = document.getElementById('analysisArea');
-            area.style.display = 'block';
-
-            if (data.error) {
-                area.innerHTML = '<div style="padding:16px;color:#cf1322;">' + escapeHtml(data.error) + '</div>';
-                setStatus('error', data.error);
-                return;
-            }
-
-            const scenarios = data.scenarios || [];
-            if (scenarios.length === 0) {
-                area.innerHTML = '<p style="color:#666;">未识别出业务场景</p>';
-                setStatus('done', '未识别出业务场景');
-                return;
-            }
-
-            let html = '<h3>🔗 业务场景链路</h3>';
-            html += '<p style="color:#666;margin-bottom:12px;">共识别 <strong>' + scenarios.length + '</strong> 个业务场景</p>';
-
-            scenarios.forEach((s, si) => {
-                html += '<div class="scenario-card">';
-                html += '<h4>' + (si + 1) + '. ' + escapeHtml(s.name || '未命名场景') + '</h4>';
-                if (s.description) html += '<div class="scenario-desc">' + escapeHtml(s.description) + '</div>';
-
-                const steps = s.steps || [];
-                steps.forEach(step => {
-                    const methodClass = 'method-' + (step.method || 'GET');
-                    html += '<div class="scenario-step">';
-                    html += '<span class="step-num">' + (step.step || '-') + '</span>';
-                    html += '<span class="method-badge ' + methodClass + '">' + (step.method || '') + '</span>';
-                    html += '<code>' + escapeHtml(step.resource || step.url || '') + '</code>';
-                    html += '<span style="color:#666;font-size:12px;margin-left:auto;">' + escapeHtml(step.action || '') + '</span>';
-                    html += '</div>';
-                });
-
-                html += '</div>';
+        window.viewFallbackHistory = function(id) {
+          var st = document.getElementById('status');
+          if (st) { st.className = 'status active'; st.innerHTML = '加载历史记录...'; }
+          fetch('/capture/history/' + encodeURIComponent(id))
+            .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function(record) {
+              var apis = record.apis || [];
+              var mapped = apis.map(function(a) {
+                return {
+                  method: a.method || 'GET',
+                  url: a.apiName || (a.method + ' ' + (a.resource || '/')),
+                  resource: a.resource,
+                  statusCode: a.statusCode || '-',
+                  domain: record.mainDomain || '-',
+                  category: a.category || '',
+                  businessStep: '-',
+                  confidence: a.confidence || null,
+                  ruleTags: a.category ? [a.category] : [],
+                  mergedFrom: null,
+                  request: a.request || {},
+                  response: a.response || {},
+                  sessionId: record.id,
+                  apiName: a.apiName || (a.method + ' ' + (a.resource || '/'))
+                };
+              });
+              window.renderFallbackTable(mapped);
+              if (st) { st.className = 'status done'; st.innerHTML = '已加载: ' + (record.title || '历史记录') + ' (' + mapped.length + ' 个接口)'; }
+              window.closeFallbackHistory();
+              fetch('/capture/load-history/' + encodeURIComponent(id), { method: 'POST' }).catch(function(e){});
+            })
+            .catch(function(e) {
+              if (st) { st.className = 'status error'; st.innerHTML = '加载失败: ' + e.message; }
             });
+        };
 
-            if (data.raw) {
-                html += '<details style="margin-top:12px;"><summary>AI 原始响应</summary>'
-                    + '<pre style="font-size:12px;">' + escapeHtml(data.raw) + '</pre></details>';
-            }
-
-            area.innerHTML = html;
-            setStatus('done', '业务场景识别完成，共 ' + scenarios.length + ' 个场景');
-            showLoading(false);
-        } catch (e) {
-            setStatus('error', '业务场景识别失败：' + e.message);
-            showLoading(false);
-        }
-    }
-
-    // ==================== AI 去重 ====================
-
-    let dedupData = { apis: [], totalRaw: 0, total: 0 };
-
-    async function aiValidate() {
-        showLoading(true, '🎯 AI 去重中...');
-        try {
-            // 30s 超时，避免 AI 调用挂起
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 30000);
-
-            const res = await fetch('/capture/ai-dedup', {
-                method: 'POST',
-                signal: controller.signal
+        window.deleteFallbackHistory = function(id, title) {
+          if (!confirm('确定删除历史记录「' + (title || id) + '」？')) return;
+          var st = document.getElementById('status');
+          fetch('/capture/history/' + encodeURIComponent(id), { method: 'DELETE' })
+            .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+            .then(function() {
+              if (st) { st.className = 'status done'; st.innerHTML = '历史记录已删除'; }
+              loadFallbackHistory();
+            })
+            .catch(function(e) {
+              if (st) { st.className = 'status error'; st.innerHTML = '删除失败: ' + e.message; }
             });
-            clearTimeout(timeout);
+        };
 
-            if (!res.ok) {
-                throw new Error('服务器返回 ' + res.status + ' ' + res.statusText);
-            }
-            const data = await res.json();
-            dedupData = data;
-            const area = document.getElementById('dedupArea');
-            area.style.display = 'block';
-
-            let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
-            html += '<h3 style="margin:0;">🎯 去重后接口清单</h3>';
-            html += '<span style="font-size:14px;color:#666;">原始 ' + data.totalRaw + ' 个 → <strong style="color:#1677ff;">' + data.total + '</strong> 个</span>';
-            html += '</div>';
-
-            if (data.fallback) {
-                html += '<div style="padding:8px 12px;background:#fffbe6;border-radius:4px;margin-bottom:12px;font-size:13px;border:1px solid #ffe58f;">'
-                    + '⚠️ AI 结果不可用，已回退到机械去重</div>';
-            }
-
-            // 同主表一致的表格样式
-            html += '<div style="overflow-x:auto;">';
-            html += '<table class="result-table"><thead><tr>'
-                + '<th>#</th><th>方法</th><th>URL</th><th>接口名称</th><th>Resource</th><th>调用次数</th>'
-                + '</tr></thead><tbody>';
-
-            (data.apis || []).forEach((a, i) => {
-                html += '<tr onclick="showDedupDetail(' + i + ')" style="cursor:pointer;">'
-                    + '<td>' + (i + 1) + '</td>'
-                    + '<td><span class="method-badge method-' + a.method + '">' + a.method + '</span></td>'
-                    + '<td class="url-cell">' + escapeHtml(a.urlExample || '-') + '</td>'
-                    + '<td><strong>' + escapeHtml(a.apiName || '-') + '</strong></td>'
-                    + '<td><code>' + escapeHtml(a.resource || '-') + '</code></td>'
-                    + '<td>' + (a.callCount || 1) + ' 次</td>'
-                    + '</tr>';
+        window.renameFallbackHistory = function(id) {
+          var newTitle = prompt('请输入新的标题名称：');
+          if (!newTitle || !newTitle.trim()) return;
+          var st = document.getElementById('status');
+          fetch('/capture/history/' + encodeURIComponent(id) + '/rename', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: newTitle.trim() })
+          })
+            .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function(data) {
+              if (st) { st.className = 'status done'; st.innerHTML = '标题已更新为: ' + data.title; }
+              loadFallbackHistory();
+            })
+            .catch(function(e) {
+              if (st) { st.className = 'status error'; st.innerHTML = '重命名失败: ' + e.message; }
             });
+        };
 
-            html += '</tbody></table>';
-            html += '</div>';
-
-            // 详情区
-            html += '<div class="detail-grid" id="dedupDetailArea" style="margin-top:12px;">';
-            html += '<div class="detail-block" style="grid-column:1/-1;color:#999;">点击上方条目查看详情</div>';
-            html += '</div>';
-
-            if (data.raw) {
-                html += '<details style="margin-top:12px;"><summary style="cursor:pointer;color:#666;font-size:13px;">AI 原始响应</summary>'
-                    + '<pre style="font-size:12px;background:#fff;padding:10px;border-radius:4px;max-height:200px;overflow:auto;">' + escapeHtml(data.raw) + '</pre></details>';
-            }
-
-            area.innerHTML = html;
-            // 标记导出按钮使用去重数据
-            document.querySelector('.btn-export[onclick*="exportApifox"]').textContent = '📥 导出（去重后）';
-            setStatus('done', 'AI 去重完成：' + data.totalRaw + ' → ' + data.total + ' 个，点击📥导出将使用去重结果');
-            showLoading(false);
-        } catch (e) {
-            setStatus('error', 'AI 去重失败：' + e.message);
-            showLoading(false);
-        }
-    }
-
-    function showDedupDetail(index) {
-        const apis = dedupData.apis || [];
-        const a = apis[index];
-        if (!a) return;
-        const div = document.getElementById('dedupDetailArea');
-        if (!div) return;
-
-        let html = '';
-        html += '<div class="detail-block"><h4>📋 基本信息</h4>';
-        html += '<div style="font-size:12px;">'
-            + '接口名称: <strong>' + escapeHtml(a.apiName || '-') + '</strong><br>'
-            + '请求方法: <span class="method-badge method-' + a.method + '">' + a.method + '</span><br>'
-            + 'Resource: <code>' + escapeHtml(a.resource || '-') + '</code><br>'
-            + '调用次数: ' + (a.callCount || 1) + ' 次<br>'
-            + '</div></div>';
-
-        html += '<div class="detail-block"><h4>🔗 URL 示例</h4>';
-        html += '<pre style="word-break:break-all;white-space:pre-wrap;">' + escapeHtml(a.urlExample || '-') + '</pre></div>';
-
-        if (a.mergedUrls && a.mergedUrls.length > 0) {
-            html += '<div class="detail-block"><h4>📎 合并的 URL</h4>';
-            html += '<div style="font-size:12px;">' + a.mergedUrls.map(u => '<div><code>' + escapeHtml(u) + '</code></div>').join('') + '</div></div>';
-        }
-
-        div.innerHTML = html;
-    }
-
-    // ==================== 链路分析 ====================
-
-    async function aiAnalyze() {
-        showLoading(true, '🤖 AI 正在分析业务链路...');
-        try {
-            const res = await fetch('/capture/analyze', { method: 'POST' });
-            const data = await res.json();
-
-            // 回填 AI 字段到本地 assets
-            if (data.assets) {
-                assets = data.assets;
-                renderTable();
-            }
-
-            const area = document.getElementById('analysisArea');
-            area.style.display = 'block';
-            const s = data.structured || {};
-
-            let html = '<h3>🔗 ' + escapeHtml(s.flowName || '业务链路分析') + '</h3>';
-            if (s.description) html += '<p style="color:#666;margin-bottom:12px;">' + escapeHtml(s.description) + '</p>';
-
-            if (s.steps && s.steps.length) {
-                html += '<h4>业务流程步骤</h4>';
-                s.steps.forEach(step => {
-                    html += '<div class="flow-step">';
-                    html += '<strong>Step ' + step.step + ':</strong> ' + escapeHtml(step.action || '');
-                    html += ' → <code>' + (step.apis || []).join(', ') + '</code>';
-                    if (step.intent) html += ' <span class="tag tag-ai">' + escapeHtml(step.intent) + '</span>';
-                    if (step.description) html += '<br><small>' + escapeHtml(step.description) + '</small>';
-                    html += '</div>';
-                });
-            }
-
-            if (s.dataFlow && s.dataFlow.length) {
-                html += '<h4>数据流转</h4>';
-                s.dataFlow.forEach(df => {
-                    html += '<div class="flow-step flow-data">';
-                    html += '<code>' + escapeHtml(df.from || '') + '</code>';
-                    html += ' → <code>' + escapeHtml(df.to || '') + '</code>';
-                    if (df.value) html += ' <span style="color:#666;">(' + escapeHtml(df.value) + ')</span>';
-                    html += '</div>';
-                });
-            }
-
-            html += '<details style="margin-top:12px;"><summary>原始分析文本</summary>'
-                + '<pre style="font-size:12px;">' + escapeHtml(data.raw || '') + '</pre></details>';
-            area.innerHTML = html;
-
-            setStatus('done', '链路分析完成 ' + (s.steps ? '(' + s.steps.length + ' 个步骤)' : '')
-                + ' <span class="ctx-badge ctx-shared">继承验证上下文</span>');
-            showLoading(false);
-        } catch (e) {
-            setStatus('error', '链路分析失败：' + e.message);
-            showLoading(false);
-        }
-    }
-
-    // ==================== 接口文档 ====================
-
-    async function showDocs() {
-        try {
-            const res = await fetch('/capture/docs');
-            const md = await res.text();
-            const area = document.getElementById('analysisArea');
-            area.style.display = 'block';
-            area.innerHTML = '<h3>📄 API 接口文档</h3>'
-                + '<pre style="font-size:12px;white-space:pre-wrap;max-height:500px;overflow:auto;">' + escapeHtml(md) + '</pre>'
-                + '<button class="btn btn-export" style="margin-top:8px;" onclick="downloadFile(\'/capture/docs\', \'api-docs.md\')">下载 .md</button>';
-        } catch (e) {
-            setStatus('error', '生成文档失败：' + e.message);
-        }
-    }
-
-    // ==================== Postman/Apifox 导出 ====================
-
-    async function exportPostman() {
-        try {
-            const res = await fetch('/capture/export/postman');
-            const json = await res.json();
-            const envVars = (json.variable && json.variable.variable) ? json.variable.variable : [];
-            const varNames = envVars.map(v => v.key).join(', ');
-            downloadBlob(JSON.stringify(json, null, 2), 'postman-collection.json', 'application/json');
-            setStatus('done', 'Postman 集合已下载 🎯 环境变量: {{' + varNames + '}}');
-        } catch (e) {
-            setStatus('error', '导出失败：' + e.message);
-        }
-    }
-
-    async function exportApifox() {
-        try {
-            const res = await fetch('/capture/export/apifox');
-            if (!res.ok) {
-                throw new Error('服务器返回 ' + res.status + ' ' + res.statusText);
-            }
-            const collection = await res.json();
-            const name = (collection.info && collection.info.name) ? collection.info.name : 'apifox-export';
-
-            // 判断是否是去重导出
-            const isDedup = name.indexOf('去重') >= 0;
-            downloadBlob(JSON.stringify(collection, null, 2), name + '.json', 'application/json');
-            if (isDedup) {
-                setStatus('done', 'AI 去重结果已导出 🎯 共 ' + (collection.item || []).reduce((sum, f) => sum + (f.item || []).length, 0) + ' 个接口');
-            } else {
-                setStatus('done', 'Apifox 导出完成<br>打开 Apifox → 导入 → Postman 格式 → 选择下载的文件');
-            }
-        } catch (e) {
-            setStatus('error', 'Apifox 导出失败：' + e.message);
-        }
-    }
-
-    // ==================== 测试用例 ====================
-
-    async function generateTestCases() {
-        showLoading(true, '🧪 AI 正在生成测试用例...');
-        try {
-            const res = await fetch('/capture/testcases', { method: 'POST' });
-            const data = await res.json();
-            const area = document.getElementById('analysisArea');
-            area.style.display = 'block';
-
-            let html = '<h3>🧪 测试用例</h3>';
-            html += '<button class="btn btn-export" style="margin-bottom:12px;" onclick="copyTestCases()">📋 复制 JSON</button>';
-
-            const cases = data.testCases || [];
-            if (cases.length === 0) {
-                html += '<p style="color:#666;">无测试用例</p>';
-            }
-            cases.forEach((tc, i) => {
-                html += '<div class="testcase-block">';
-                html += '<strong>' + (i + 1) + '. ' + escapeHtml(tc.method || '')
-                    + ' ' + escapeHtml(tc.api || '') + '</strong>';
-                if (tc.businessStep) html += ' <span class="tag tag-ai">' + escapeHtml(tc.businessStep) + '</span>';
-                (tc.cases || []).forEach(c => {
-                    const typeClass = 'tc-' + (c.type || 'normal');
-                    html += '<div style="margin:6px 0 0 16px;padding:8px;background:#fafafa;border-radius:4px;">';
-                    html += '<span class="tc-tag ' + typeClass + '">' + (c.type || 'case') + '</span>';
-                    html += '<span style="font-weight:600;">' + escapeHtml(c.name || '') + '</span>';
-                    if (c.description) html += ' <small>' + escapeHtml(c.description) + '</small>';
-                    if (c.expectStatus != null) {
-                        const cls = c.expectStatus < 400 ? 'stat-ok' : 'stat-err';
-                        html += ' <span class="' + cls + '" style="font-size:11px;">期望 ' + c.expectStatus + '</span>';
-                    }
-                    if (c.input) html += '<pre style="font-size:11px;margin-top:4px;">输入: ' + escapeHtml(JSON.stringify(c.input, null, 2)) + '</pre>';
-                    if (c.assert) html += '<pre style="font-size:11px;">断言: ' + escapeHtml(JSON.stringify(c.assert, null, 2)) + '</pre>';
-                    html += '</div>';
-                });
-                html += '</div>';
-            });
-
-            if (data.raw) {
-                html += '<details style="margin-top:12px;"><summary>原始响应</summary><pre style="font-size:12px;">' + escapeHtml(data.raw) + '</pre></details>';
-            }
-            area.innerHTML = html;
-            setStatus('done', '测试用例生成完成 (' + cases.length + ' 个接口) '
-                + '<span class="ctx-badge ctx-shared">继承链路上下文</span>');
-            showLoading(false);
-        } catch (e) {
-            setStatus('error', '生成测试用例失败：' + e.message);
-            showLoading(false);
-        }
-    }
-
-    function copyTestCases() {
-        fetch('/capture/testcases', { method: 'POST' }).then(r => r.json()).then(data => {
-            navigator.clipboard.writeText(JSON.stringify(data.testCases || data, null, 2)).then(() => {
-                setStatus('done', '测试用例 JSON 已复制到剪贴板');
-            });
-        });
-    }
-
-    // ==================== 工具 ====================
-
-    function downloadFile(url, filename) {
-        fetch(url).then(r => r.text()).then(text => {
-            downloadBlob(text, filename, 'text/markdown');
-        });
-    }
-
-    function downloadBlob(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(a.href);
-    }
-
-    function escapeHtml(str) {
-        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    function setStatus(type, msg) {
-        const el = document.getElementById('status');
-        el.className = 'status ' + type;
-        el.innerHTML = msg;
-    }
-
-    function showLoading(show, msg) {
-        const el = document.getElementById('loadingOverlay');
-        if (show) {
-            el.querySelector('.loading-text').textContent = msg || '处理中...';
-            el.style.display = 'flex';
-        } else {
-            el.style.display = 'none';
-        }
-    }
-
-    // ==================== 录制状态栏 ====================
-
-    function startRecTimer() {
-        recStartTime = Date.now();
-        recRawCount = 0;
-        const el = document.getElementById('recStatus');
-        el.className = 'rec-status recording';
-        el.innerHTML = '<span><span class="dot dot-red"></span>正在录制</span>'
-            + '<span class="stat-item">已捕获: <strong id="recRawCount">0</strong></span>'
-            + '<span class="stat-item">时长: <strong id="recDuration">00:00</strong></span>';
-        recTimer = setInterval(pollRecStatus, 2000);
-        pollRecStatus();
-    }
-
-    function stopRecTimer() {
-        if (recTimer) { clearInterval(recTimer); recTimer = null; }
-        const el = document.getElementById('recStatus');
-        el.className = 'rec-status done';
-        el.innerHTML = '<span><span class="dot dot-green"></span>录制完成</span>'
-            + '<span class="stat-item">核心接口: <strong>' + assets.length + '</strong></span>'
-            + '<span class="stat-item">历史已保存</span>';
-    }
-
-    async function pollRecStatus() {
-        if (!recTimer) return;
-        try {
-            const res = await fetch('/capture/raw');
-            const data = await res.json();
-            recRawCount = data.total || 0;
-            document.getElementById('recRawCount').textContent = recRawCount;
-        } catch (e) { /* ignore polling errors */ }
-        // update duration
-        const secs = Math.floor((Date.now() - recStartTime) / 1000);
-        const mm = String(Math.floor(secs / 60)).padStart(2, '0');
-        const ss = String(secs % 60).padStart(2, '0');
-        const durEl = document.getElementById('recDuration');
-        if (durEl) durEl.textContent = mm + ':' + ss;
-    }
-
-    // ==================== 历史记录面板 ====================
-
-    function toggleHistoryPanel() {
-        const sidebar = document.getElementById('historySidebar');
-        const backdrop = document.getElementById('historyBackdrop');
-        const isOpen = sidebar.classList.contains('open');
-        if (isOpen) {
-            closeHistoryPanel();
-        } else {
-            sidebar.classList.add('open');
-            backdrop.classList.add('open');
-            loadHistoryList();
-        }
-    }
-
-    function closeHistoryPanel() {
-        document.getElementById('historySidebar').classList.remove('open');
-        document.getElementById('historyBackdrop').classList.remove('open');
-    }
-
-    async function loadHistoryList() {
-        const listEl = document.getElementById('historyList');
-        listEl.innerHTML = '<div class="history-loading">加载中...</div>';
-        try {
-            const res = await fetch('/capture/history');
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            const list = await res.json();
-            if (!list || list.length === 0) {
+        function loadFallbackHistory() {
+          var listEl = document.getElementById('historyList');
+          if (!listEl) return;
+          listEl.innerHTML = '<div class="history-loading">加载中...</div>';
+          fetch('/capture/history').then(function(r) { return r.json(); })
+            .then(function(list) {
+              if (!list || list.length === 0) {
                 listEl.innerHTML = '<div class="history-empty">暂无历史记录</div>';
                 return;
-            }
-            let html = '';
-            list.forEach(item => {
-                const time = item.createdAt ? formatTime(item.createdAt) : '-';
+              }
+              var html = '';
+              list.forEach(function(item) {
+                var time = item.createdAt ? new Date(item.createdAt).toLocaleString() : '-';
                 html += '<div class="history-item">'
-                    + '<div class="hi-title">' + escapeHtml(item.title || '未命名') + '</div>'
-                    + '<div class="hi-meta">'
-                    + '<span>' + time + '</span>'
-                    + '<span>' + (item.apiCount || 0) + ' 个接口</span>'
-                    + '</div>'
-                    + '<div class="hi-actions">'
-                    + '<button class="hi-view" onclick="event.stopPropagation();loadHistoryRecord(\'' + item.id + '\')">查看</button>'
-                    + '<button class="hi-delete" onclick="event.stopPropagation();confirmDeleteHistory(\'' + item.id + '\',\'' + escapeHtml(item.title || '') + '\')">删除</button>'
-                    + '</div>'
-                    + '</div>';
+                  + '<div class="hi-title">' + h(item.title || '未命名') + '</div>'
+                  + '<div class="hi-meta"><span>' + time + '</span><span>' + (item.apiCount || 0) + ' 个接口</span></div>'
+                  + '<div class="hi-actions">'
+                  + '<button class="hi-view" onclick="viewFallbackHistory(' + "'" + item.id + "'" + ')">查看</button>'
+                  + '<button class="hi-reload" onclick="renameFallbackHistory(' + "'" + item.id + "'" + ')">改名称</button>'
+                  + '<button class="hi-delete" onclick="deleteFallbackHistory(' + "'" + item.id + "'" + ',' + "'" + h(item.title || '') + "'" + ')">删除</button>'
+                  + '</div>'
+                  + '</div>';
+              });
+              listEl.innerHTML = html;
+            })
+            .catch(function(e) {
+              listEl.innerHTML = '<div class="history-empty">加载失败: ' + e.message + '</div>';
             });
-            listEl.innerHTML = html;
-        } catch (e) {
-            listEl.innerHTML = '<div class="history-empty">加载失败: ' + escapeHtml(e.message) + '</div>';
-        }
-    }
+        };
 
-    function formatTime(ts) {
-        const d = new Date(ts);
-        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')
-            + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
-    }
-
-    async function loadHistoryRecord(id) {
-        showLoading(true, '加载历史记录...');
-        try {
-            const res = await fetch('/capture/history/' + id);
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            const record = await res.json();
-            if (!record.apis || record.apis.length === 0) {
-                setStatus('done', '历史记录无接口数据');
-                showLoading(false);
-                return;
-            }
-            // 转换为 assets 格式供表格渲染
-            assets = record.apis.map((a, i) => ({
-                method: a.method || 'GET',
-                url: a.apiName || (a.method + ' ' + (a.resource || '/')),
-                resource: a.resource,
-                statusCode: '-',
-                domain: record.mainDomain || '-',
-                category: a.category || '',
-                businessStep: '-',
-                confidence: null,
-                ruleTags: a.category ? [a.category] : [],
-                mergedFrom: null,
-                request: {},
-                response: {},
-                sessionId: record.id,
-                apiName: a.apiName || (a.method + ' ' + (a.resource || '/'))
-            }));
-            renderTable();
-            closeHistoryPanel();
-            const label = record.title || '历史记录';
-            setStatus('done', '已加载: ' + label + ' (' + assets.length + ' 个接口)');
-            showLoading(false);
-        } catch (e) {
-            setStatus('error', '加载历史记录失败: ' + e.message);
-            showLoading(false);
-        }
-    }
-
-    async function confirmDeleteHistory(id, title) {
-        if (!confirm('确定删除历史记录「' + (title || id) + '」？')) return;
-        try {
-            const res = await fetch('/capture/history/' + id, { method: 'DELETE' });
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            loadHistoryList();
-            setStatus('done', '历史记录已删除');
-        } catch (e) {
-            setStatus('error', '删除失败: ' + e.message);
-        }
-    }
+        // ====== 面板切换（fallback）======
+        window.switchTo = function(feature) {
+          if (!feature) {
+            document.querySelectorAll('.content-panel').forEach(function(p) { p.classList.remove('active'); });
+            var table = document.getElementById('panel-table');
+            if (table) table.classList.add('active');
+            document.querySelectorAll('.tb-btn').forEach(function(b) { b.classList.remove('active'); });
+            return;
+          }
+          var panel = document.getElementById('panel-' + feature);
+          if (!panel) return;
+          document.querySelectorAll('.content-panel').forEach(function(p) { p.classList.remove('active'); });
+          panel.classList.add('active');
+          document.querySelectorAll('.tb-btn').forEach(function(b) { b.classList.remove('active'); });
+          var btn = document.querySelector('.tb-btn.tb-' + feature);
+          if (btn) btn.classList.add('active');
+        };
+      }
+    }, 100);
+  });
 </script>
 </body>
 </html>

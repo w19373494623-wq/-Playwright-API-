@@ -5,7 +5,9 @@ import com.example.model.ApiAsset;
 import com.example.model.BusinessFlow;
 import com.example.model.DedupResult;
 import com.example.model.HistoryRecord;
+import com.example.model.ApiSummary;
 import com.example.service.ActionRecognizer;
+import com.example.service.AiAnalyzeService;
 import com.example.service.AiChatService;
 import com.example.service.ApiCaptureService;
 import com.example.service.DedupService;
@@ -20,6 +22,8 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,6 +46,7 @@ public class CaptureController {
 
     private final ApiCaptureService apiCaptureService;
     private final AiChatService aiChatService;
+    private final AiAnalyzeService aiAnalyzeService;
     private final DedupService dedupService;
     private final AiResultParser aiResultParser;
     private final HistoryService historyService;
@@ -54,11 +59,13 @@ public class CaptureController {
 
     public CaptureController(ApiCaptureService apiCaptureService,
                              AiChatService aiChatService,
+                             AiAnalyzeService aiAnalyzeService,
                              DedupService dedupService,
                              AiResultParser aiResultParser,
                              HistoryService historyService) {
         this.apiCaptureService = apiCaptureService;
         this.aiChatService = aiChatService;
+        this.aiAnalyzeService = aiAnalyzeService;
         this.dedupService = dedupService;
         this.aiResultParser = aiResultParser;
         this.historyService = historyService;
@@ -67,27 +74,36 @@ public class CaptureController {
     // ==================== 基础录制 ====================
 
     @PostMapping("/capture/start")
-    public String start(@RequestParam String url) {
+    public String start(@RequestParam(defaultValue = "") String url) {
+        if (url.isBlank()) {
+            throw new IllegalArgumentException("url 不能为空");
+        }
         captureStartTime = System.currentTimeMillis();
         apiCaptureService.start(url);
         return "浏览器已打开，请手动操作页面，操作完后调用 POST /capture/stop";
     }
 
     @PostMapping("/capture/stop")
-    public List<ApiAsset> stop() {
+    public Map<String, Object> stop() {
         List<ApiAsset> assets = apiCaptureService.stopAndFilter();
 
+        String historyId = null;
         // 保存历史记录（第一阶段，不依赖 AI）
         try {
             String pageUrl = assets.isEmpty() ? null : assets.get(0).getPageUrl();
-            historyService.save(assets, apiCaptureService.getMainDomain(),
+            HistoryRecord record = historyService.save(assets, apiCaptureService.getMainDomain(),
                     pageUrl, captureStartTime > 0 ? captureStartTime : System.currentTimeMillis());
+            historyId = record.getId();
         } catch (Exception e) {
             log.error("保存历史记录失败", e);
         }
 
         captureStartTime = 0;
-        return assets;
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("assets", assets);
+        result.put("historyId", historyId);
+        return result;
     }
 
     /** 实时查看原始捕获（未经过滤），操作过程中可随时查看 */
@@ -361,6 +377,152 @@ public class CaptureController {
         return ResponseEntity.ok(Map.of("deleted", true, "id", id));
     }
 
+    /** 从历史记录导出 Apifox Collection（支持对历史数据做烟雾测试） */
+    @GetMapping("/capture/history/{id}/export/apifox")
+    public ResponseEntity<?> historyExportApifox(@PathVariable String id) {
+        HistoryRecord record = historyService.findById(id);
+        if (record == null) {
+            return ResponseEntity.notFound().build();
+        }
+        Map<String, Object> collection = buildApifoxCollectionFromHistory(record);
+        return ResponseEntity.ok(collection);
+    }
+
+    /**
+     * 将历史记录加载到当前录制会话中。
+     * 调用后，统计/AI去重/导出/场景分析等所有功能都会针对该历史记录操作。
+     */
+    @PostMapping("/capture/load-history/{id}")
+    public ResponseEntity<?> loadHistoryIntoSession(@PathVariable String id) {
+        HistoryRecord record = historyService.findById(id);
+        if (record == null) {
+            return ResponseEntity.notFound().build();
+        }
+        List<ApiSummary> apis = record.getApis();
+        if (apis == null || apis.isEmpty()) {
+            return ResponseEntity.ok(Map.of("loaded", false, "message", "历史记录无接口数据"));
+        }
+
+        String domain = record.getMainDomain();
+        List<ApiAsset> assets = new ArrayList<>();
+        int seq = 1;
+        for (ApiSummary api : apis) {
+            ApiAsset a = new ApiAsset();
+            a.setMethod(api.getMethod());
+            a.setResource(api.getResource());
+
+            // 优先使用存储的完整 URL，否则拼接
+            String fullUrl = api.getUrl();
+            if (fullUrl != null && !fullUrl.isBlank()) {
+                a.setUrl(fullUrl);
+            } else {
+                a.setUrl("https://" + (domain != null ? domain : "unknown") + api.getResource());
+            }
+
+            a.setDomain(domain);
+            a.setStatusCode(200);
+            a.setSequence(seq++);
+            a.setCategory(api.getCategory());
+            a.setSessionId(record.getId());
+            a.setPageUrl(record.getUrl());
+
+            // 还原请求体
+            a.setRequestBody(api.getRequestBody());
+
+            // 还原请求/响应 map
+            Map<String, Object> req = new LinkedHashMap<>();
+            if (api.getHeaders() != null) {
+                req.put("headers", new LinkedHashMap<>(api.getHeaders()));
+            } else {
+                req.put("headers", new LinkedHashMap<String, String>());
+            }
+            req.put("body", api.getRequestBody());
+            a.setRequest(req);
+
+            Map<String, Object> res = new LinkedHashMap<>();
+            res.put("headers", new LinkedHashMap<String, String>());
+            res.put("body", null);
+            a.setResponse(res);
+
+            assets.add(a);
+        }
+
+        apiCaptureService.setLastResult(assets);
+        log.info("历史记录已加载到会话: id={}, title={}, apis={}", id, record.getTitle(), assets.size());
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("loaded", true);
+        result.put("total", assets.size());
+        result.put("title", record.getTitle());
+        return ResponseEntity.ok(result);
+    }
+
+    /** 重命名历史记录标题 */
+    @PutMapping("/capture/history/{id}/rename")
+    public ResponseEntity<?> renameHistory(@PathVariable String id,
+                                            @RequestBody Map<String, String> body) {
+        HistoryRecord record = historyService.findById(id);
+        if (record == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String newTitle = body.get("title");
+        if (newTitle == null || newTitle.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "标题不能为空"));
+        }
+        historyService.updateTitle(id, newTitle);
+        return ResponseEntity.ok(Map.of("renamed", true, "id", id, "title", newTitle));
+    }
+
+    // ==================== 环境变量管理 ====================
+
+    /**
+     * 获取历史记录的环境变量。
+     */
+    @GetMapping("/capture/history/{id}/env-vars")
+    public ResponseEntity<?> getEnvVars(@PathVariable String id) {
+        HistoryRecord record = historyService.findById(id);
+        if (record == null) {
+            return ResponseEntity.notFound().build();
+        }
+        Map<String, String> envVars = record.getEnvVars();
+        if (envVars == null) envVars = Map.of();
+        return ResponseEntity.ok(Map.of("envVars", envVars));
+    }
+
+    /**
+     * 更新历史记录的环境变量。
+     */
+    @PutMapping("/capture/history/{id}/env-vars")
+    public ResponseEntity<?> updateEnvVars(@PathVariable String id,
+                                            @RequestBody Map<String, Object> body) {
+        HistoryRecord record = historyService.findById(id);
+        if (record == null) {
+            return ResponseEntity.notFound().build();
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, String> envVars = (Map<String, String>) body.get("envVars");
+        if (envVars == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "envVars 不能为空"));
+        }
+        record.setEnvVars(envVars);
+        historyService.updateEnvVars(id, envVars);
+        return ResponseEntity.ok(Map.of("updated", true, "envVars", envVars));
+    }
+
+    /**
+     * 获取当前会话的环境变量。
+     */
+    @GetMapping("/capture/env-vars")
+    public ResponseEntity<?> getSessionEnvVars() {
+        List<ApiAsset> assets = apiCaptureService.getLastResult();
+        if (assets == null || assets.isEmpty()) {
+            return ResponseEntity.ok(Map.of("envVars", Map.of()));
+        }
+        Map<String, String> envVars = extractAllVariables(assets);
+        // 额外从最近的历史记录中读取（如果有匹配的 sessionId）
+        return ResponseEntity.ok(Map.of("envVars", envVars));
+    }
+
     // ==================== AI 业务去重 ====================
 
     @PostMapping("/capture/ai-dedup")
@@ -392,7 +554,7 @@ public class CaptureController {
         String prompt = buildAnalyzePrompt(assets, ctx != null ? ctx.getSemanticSummary() : null);
         String aiResponse;
         try {
-            aiResponse = aiChatService.chat("analyze", prompt);
+            aiResponse = aiAnalyzeService.chat(prompt);
         } catch (Exception e) {
             log.warn("AI 链路分析调用失败: {}", e.getMessage());
             return Map.of("error", "AI 服务不可用: " + e.getMessage());
@@ -570,14 +732,15 @@ public class CaptureController {
     /** Apifox 格式导出 — Postman Collection v2.1 格式，Apifox 原生支持导入 */
     @GetMapping("/capture/export/apifox")
     public ResponseEntity<Map<String, Object>> exportApifox() {
+        List<ApiAsset> allAssets = apiCaptureService.getLastResult();
+
         // 优先使用 AI 去重结果（如果有）
         if (lastDedupResult != null && !lastDedupResult.getApis().isEmpty()) {
             Map<String, Object> collection = buildApifoxCollectionFromDedup(
-                    apiCaptureService.getMainDomain(), lastDedupResult.getApis());
+                    apiCaptureService.getMainDomain(), lastDedupResult.getApis(), allAssets);
             return ResponseEntity.ok(collection);
         }
 
-        List<ApiAsset> allAssets = apiCaptureService.getLastResult();
         if (allAssets == null || allAssets.isEmpty()) {
             return ResponseEntity.ok(buildApifoxCollection(null, List.of()));
         }
@@ -597,23 +760,89 @@ public class CaptureController {
         return ResponseEntity.ok(collection);
     }
 
-    /** 从 AI 去重结果构建 Apifox Collection */
+    /** 从 AI 去重结果构建 Apifox Collection（含环境变量 + 中文分组 + Pre-request Script） */
     private Map<String, Object> buildApifoxCollectionFromDedup(String mainDomain,
-                                                                List<Map<String, Object>> dedupApis) {
+                                                                List<Map<String, Object>> dedupApis,
+                                                                List<ApiAsset> allAssets) {
         Map<String, Object> collection = new LinkedHashMap<>();
 
         Map<String, Object> info = new LinkedHashMap<>();
-        info.put("name", (mainDomain != null ? mainDomain : "API") + " - AI 去重导出");
+        info.put("name", (mainDomain != null ? mainDomain : "API") + " - 业务接口");
         info.put("schema", "https://schema.getpostman.com/json/collection/v2.1.0/collection.json");
         collection.put("info", info);
 
-        // 按 domain 分组
+        // 从原始捕获数据中提取 token / userId
+        Map<String, String> extractedVars = allAssets != null ? extractAllVariables(allAssets) : Map.of();
+
+        // 环境变量（token 优先从捕获数据填充）
+        List<Map<String, String>> varList = new ArrayList<>();
+        varList.add(varEntry("baseUrl", "https://" + (mainDomain != null ? mainDomain : "unknown")));
+        varList.add(varEntry("token", extractedVars.getOrDefault("token", "")));
+        varList.add(varEntry("userId", extractedVars.getOrDefault("userId", "")));
+        varList.add(varEntry("username", ""));
+        varList.add(varEntry("password", ""));
+        collection.put("variable", varList);
+
+        // Pre-request Script: 自动获取 Token
+        List<Map<String, Object>> events = new ArrayList<>();
+        Map<String, Object> preReqEvent = new LinkedHashMap<>();
+        preReqEvent.put("listen", "prerequest");
+        Map<String, Object> script = new LinkedHashMap<>();
+        script.put("type", "text/javascript");
+        script.put("exec", List.of(
+                "// 如果 token 为空，尝试从登录接口获取",
+                "// 根据实际情况修改 loginUrl、字段名和凭证来源",
+                "var token = pm.environment.get('token');",
+                "if (!token) {",
+                "    var loginUrl = pm.environment.get('baseUrl') + '/api/login';",
+                "    var credentials = {",
+                "        username: pm.environment.get('username') || 'test',",
+                "        password: pm.environment.get('password') || 'test'",
+                "    };",
+                "    pm.sendRequest({",
+                "        url: loginUrl,",
+                "        method: 'POST',",
+                "        header: { 'Content-Type': 'application/json' },",
+                "        body: {",
+                "            mode: 'raw',",
+                "            raw: JSON.stringify(credentials)",
+                "        }",
+                "    }, function (err, res) {",
+                "        if (!err) {",
+                "            try {",
+                "                var json = res.json();",
+                "                var t = json.token || json.accessToken || (json.data && json.data.token);",
+                "                if (t) {",
+                "                    pm.environment.set('token', t);",
+                "                    console.log('Token 已自动获取');",
+                "                }",
+                "            } catch(e) { console.log('解析登录响应失败: ' + e); }",
+                "        } else {",
+                "            console.log('登录请求失败: ' + err);",
+                "        }",
+                "    });",
+                "}"
+        ));
+        preReqEvent.put("script", script);
+        events.add(preReqEvent);
+        collection.put("event", events);
+
+        // 按 category 分组（中文模块名）
         Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
         for (Map<String, Object> api : dedupApis) {
             String url = (String) api.getOrDefault("urlExample", "");
-            String domain = extractHost(url);
-            if (domain == null) domain = "unknown";
-            grouped.computeIfAbsent(domain, k -> new ArrayList<>()).add(api);
+            String module = inferModuleFromUrl(url);
+            grouped.computeIfAbsent(module, k -> new ArrayList<>()).add(api);
+        }
+
+        // 构建 ApiAsset 查找表（method + resource → ApiAsset）
+        Map<String, ApiAsset> assetLookup = new LinkedHashMap<>();
+        if (allAssets != null) {
+            for (ApiAsset a : allAssets) {
+                String res = a.getResource() != null ? a.getResource() : getPath(a.getUrl());
+                String key = a.getMethod() + " " + res;
+                assetLookup.putIfAbsent(key, a);
+            }
         }
 
         List<Map<String, Object>> items = new ArrayList<>();
@@ -622,7 +851,7 @@ public class CaptureController {
             folder.put("name", entry.getKey());
             List<Map<String, Object>> folderItems = new ArrayList<>();
             for (Map<String, Object> dedupApi : entry.getValue()) {
-                folderItems.add(buildApifoxItemFromDedup(dedupApi));
+                folderItems.add(buildApifoxItemFromDedup(dedupApi, assetLookup));
             }
             folder.put("item", folderItems);
             items.add(folder);
@@ -631,21 +860,308 @@ public class CaptureController {
         return collection;
     }
 
-    /** 从 AI 去重单条记录构建 Postman 条目 */
-    private Map<String, Object> buildApifoxItemFromDedup(Map<String, Object> dedupApi) {
+    /** 从 URL 推断所属中文模块名 */
+    private String inferModuleFromUrl(String url) {
+        if (url == null) return "其他";
+        String lower = url.toLowerCase();
+        if (lower.contains("/user/") || lower.contains("/user?")) return "用户模块";
+        if (lower.contains("/login") || lower.contains("/auth/") || lower.contains("/token")) return "登录鉴权";
+        if (lower.contains("/order/") || lower.contains("/pay/") || lower.contains("/payment")) return "订单支付";
+        if (lower.contains("/content/") || lower.contains("/ugc/") || lower.contains("/post/") || lower.contains("/feed")) return "内容模块";
+        if (lower.contains("/comment/") || lower.contains("/reply/")) return "评论模块";
+        if (lower.contains("/follow") || lower.contains("/fans") || lower.contains("/relation")) return "关注模块";
+        if (lower.contains("/message/") || lower.contains("/im/") || lower.contains("/chat")) return "消息模块";
+        if (lower.contains("/search")) return "搜索模块";
+        if (lower.contains("/commerce/") || lower.contains("/product/") || lower.contains("/shop")) return "商城模块";
+        if (lower.contains("/upload") || lower.contains("/file")) return "文件模块";
+        if (lower.contains("/setting") || lower.contains("/config") || lower.contains("/privacy")) return "设置模块";
+        return "其他";
+    }
+
+    /** 从 AI 去重单条记录构建 Postman 条目（含请求体、请求头、响应示例） */
+    private Map<String, Object> buildApifoxItemFromDedup(Map<String, Object> dedupApi,
+                                                          Map<String, ApiAsset> assetLookup) {
         String method = (String) dedupApi.getOrDefault("method", "GET");
         String urlExample = (String) dedupApi.getOrDefault("urlExample", "");
         String resource = (String) dedupApi.getOrDefault("resource", "");
+        String apiName = (String) dedupApi.getOrDefault("apiName", "");
+        String name = !apiName.isBlank() && !apiName.startsWith("GET") && !apiName.startsWith("POST")
+                ? apiName : method + " " + resource;
+
+        // 查找原始 ApiAsset（优先按 method+resource 匹配，再按 url 路径匹配）
+        ApiAsset original = null;
+        if (assetLookup != null) {
+            original = assetLookup.get(method + " " + resource);
+            if (original == null) {
+                original = assetLookup.get(method + " " + getPath(urlExample));
+            }
+        }
 
         Map<String, Object> item = new LinkedHashMap<>();
-        item.put("name", method + " " + resource);
+        item.put("name", name);
+        item.put("description", apiName + "\n\n资源路径: " + resource);
 
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("method", method);
-        request.put("url", urlExample);
+        request.put("description", apiName);
+
+        // URL 对象格式（支持 {{baseUrl}} 变量替换 + query 参数解析）
+        Map<String, Object> urlObj = new LinkedHashMap<>();
+        urlObj.put("raw", "{{baseUrl}}" + resource);
+        try {
+            URI uri = URI.create(urlExample);
+            String path = uri.getPath();
+            if (path != null && !path.isEmpty()) {
+                String[] segments = path.split("/");
+                List<String> pathList = new ArrayList<>();
+                for (String seg : segments) {
+                    if (!seg.isEmpty()) pathList.add(seg);
+                }
+                if (!pathList.isEmpty()) urlObj.put("path", pathList);
+            }
+            String query = uri.getQuery();
+            if (query != null && !query.isEmpty()) {
+                List<Map<String, String>> qp = new ArrayList<>();
+                for (String param : query.split("&")) {
+                    String[] kv = param.split("=", 2);
+                    String val = kv.length > 1 ? kv[1] : "";
+                    if (val.isEmpty()) continue; // 跳过空值，避免 400
+                    qp.add(paramEntry(kv[0], val));
+                }
+                if (!qp.isEmpty()) urlObj.put("query", qp);
+            }
+        } catch (Exception ignored) {}
+        request.put("url", urlObj);
+
+        // 请求头（始终包含 Authorization: Bearer {{token}}）
+        List<Map<String, String>> headerList = new ArrayList<>();
+        headerList.add(headerEntry("Content-Type", "application/json"));
+        boolean hasAuth = false;
+        if (original != null && original.getHeaders() != null) {
+            for (Map.Entry<String, String> h : original.getHeaders().entrySet()) {
+                String hk = h.getKey();
+                if ("host".equalsIgnoreCase(hk) || "content-length".equalsIgnoreCase(hk)) continue;
+                if ("authorization".equalsIgnoreCase(hk)) {
+                    hasAuth = true;
+                    headerList.add(headerEntry(hk, "Bearer {{token}}"));
+                } else if ("content-type".equalsIgnoreCase(hk)) {
+                    continue;
+                } else {
+                    headerList.add(headerEntry(hk, h.getValue()));
+                }
+            }
+        }
+        if (!hasAuth) {
+            headerList.add(headerEntry("Authorization", "Bearer {{token}}"));
+        }
+        request.put("header", headerList);
+
+        // 请求体（从原始捕获数据还原）
+        if (original != null) {
+            Object reqBody = original.getRequest().get("body");
+            if (reqBody != null && !reqBody.toString().isBlank() && !"null".equals(reqBody.toString())) {
+                Map<String, Object> bodyObj = new LinkedHashMap<>();
+                bodyObj.put("mode", "raw");
+                try {
+                    Object parsed = objectMapper.readValue(reqBody.toString().replace('\n', ' ').trim(), Object.class);
+                    bodyObj.put("raw", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(parsed));
+                } catch (Exception e) {
+                    bodyObj.put("raw", reqBody.toString());
+                }
+                Map<String, Object> options = new LinkedHashMap<>();
+                options.put("raw", Map.of("language", "json"));
+                bodyObj.put("options", options);
+                request.put("body", bodyObj);
+            }
+        }
 
         item.put("request", request);
-        // 不带 response，保持导出简洁
+
+        // 响应示例（code/data/message 结构，优先使用真实响应体）
+        List<Map<String, Object>> responses = new ArrayList<>();
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("name", "成功响应");
+        resp.put("code", 200);
+        resp.put("status", "OK");
+        Map<String, Object> respBody = new LinkedHashMap<>();
+        respBody.put("mode", "raw");
+        if (original != null) {
+            Map<String, Object> example = buildResponseExample(original);
+            try {
+                respBody.put("raw", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(example));
+            } catch (Exception e) {
+                respBody.put("raw", "{\"code\": 200, \"message\": \"操作成功\", \"data\": {}}");
+            }
+        } else {
+            respBody.put("raw", "{\"code\": 200, \"message\": \"操作成功\", \"data\": {}}");
+        }
+        resp.put("body", respBody);
+        responses.add(resp);
+        item.put("response", responses);
+
+        return item;
+    }
+
+    /** 从历史记录构建 Apifox Collection（用于烟雾测试） */
+    private Map<String, Object> buildApifoxCollectionFromHistory(HistoryRecord record) {
+        String baseUrl = "https://" + (record.getMainDomain() != null ? record.getMainDomain() : "unknown");
+        String name = (record.getTitle() != null ? record.getTitle() : "历史记录") + " - 烟雾测试";
+
+        Map<String, Object> collection = new LinkedHashMap<>();
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("name", name);
+        info.put("schema", "https://schema.getpostman.com/json/collection/v2.1.0/collection.json");
+        collection.put("info", info);
+
+        // 环境变量 - 优先使用历史记录中保存的 envVars
+        List<Map<String, String>> varList = new ArrayList<>();
+        varList.add(varEntry("baseUrl", baseUrl));
+        if (record.getEnvVars() != null && !record.getEnvVars().isEmpty()) {
+            for (Map.Entry<String, String> e : record.getEnvVars().entrySet()) {
+                varList.add(varEntry(e.getKey(), e.getValue() != null ? e.getValue() : ""));
+            }
+        } else {
+            varList.add(varEntry("token", ""));
+            varList.add(varEntry("userId", ""));
+        }
+        collection.put("variable", varList);
+
+        // 按模块分组
+        List<ApiSummary> apis = record.getApis();
+        Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
+        if (apis != null) {
+            for (ApiSummary api : apis) {
+                String module = inferModuleFromUrl(api.getResource());
+                Map<String, Object> apiMap = new LinkedHashMap<>();
+                apiMap.put("method", api.getMethod());
+                apiMap.put("resource", api.getResource());
+                apiMap.put("apiName", api.getApiName());
+                apiMap.put("url", api.getUrl());
+                apiMap.put("headers", api.getHeaders());
+                apiMap.put("requestBody", api.getRequestBody());
+                grouped.computeIfAbsent(module, k -> new ArrayList<>()).add(apiMap);
+            }
+        }
+
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Map.Entry<String, List<Map<String, Object>>> entry : grouped.entrySet()) {
+            Map<String, Object> folder = new LinkedHashMap<>();
+            folder.put("name", entry.getKey());
+            List<Map<String, Object>> folderItems = new ArrayList<>();
+            for (Map<String, Object> dedupApi : entry.getValue()) {
+                folderItems.add(buildApifoxItemFromHistoryApi(dedupApi));
+            }
+            folder.put("item", folderItems);
+            items.add(folder);
+        }
+        collection.put("item", items);
+
+        return collection;
+    }
+
+    /** 从历史记录单条 API 构建 Apifox 条目 */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildApifoxItemFromHistoryApi(Map<String, Object> apiMap) {
+        String method = (String) apiMap.getOrDefault("method", "GET");
+        String resource = (String) apiMap.getOrDefault("resource", "");
+        String apiName = (String) apiMap.getOrDefault("apiName", "");
+        String name = apiName != null && !apiName.isBlank() ? apiName : method + " " + resource;
+
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("name", name);
+        item.put("description", "历史录制接口\n\n资源路径: " + resource);
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("method", method);
+
+        // URL 对象格式（含 query 参数）
+        String fullUrl = (String) apiMap.get("url");
+        String resourcePath = resource;
+        Map<String, List<Map<String, String>>> queryParams = null;
+        if (fullUrl != null && !fullUrl.isBlank()) {
+            try {
+                URI uri = URI.create(fullUrl);
+                String q = uri.getQuery();
+                if (q != null && !q.isEmpty()) {
+                    List<Map<String, String>> qp = new ArrayList<>();
+                    for (String param : q.split("&")) {
+                        String[] kv = param.split("=", 2);
+                        String val = kv.length > 1 ? kv[1] : "";
+                        if (val.isEmpty()) continue; // 跳过空值，避免 400
+                        qp.add(paramEntry(kv[0], val));
+                    }
+                    if (!qp.isEmpty()) queryParams = Map.of("query", qp);
+                }
+            } catch (Exception ignored) {}
+        }
+
+        Map<String, Object> urlObj = new LinkedHashMap<>();
+        urlObj.put("raw", "{{baseUrl}}" + resourcePath);
+        if (queryParams != null) {
+            urlObj.put("query", queryParams.get("query"));
+        }
+        request.put("url", urlObj);
+
+        // 请求头 - 优先使用历史记录的 headers
+        List<Map<String, String>> headerList = new ArrayList<>();
+        Object headersObj = apiMap.get("headers");
+        if (headersObj instanceof Map) {
+            Map<String, String> storedHeaders = (Map<String, String>) headersObj;
+            boolean hasAuth = false;
+            for (Map.Entry<String, String> h : storedHeaders.entrySet()) {
+                String hk = h.getKey();
+                if ("host".equalsIgnoreCase(hk) || "content-length".equalsIgnoreCase(hk)) continue;
+                if ("authorization".equalsIgnoreCase(hk)) {
+                    hasAuth = true;
+                    headerList.add(headerEntry(hk, "Bearer {{token}}"));
+                } else if ("content-type".equalsIgnoreCase(hk)) {
+                    headerList.add(headerEntry("Content-Type", "application/json"));
+                } else {
+                    headerList.add(headerEntry(hk, h.getValue()));
+                }
+            }
+            if (!hasAuth) {
+                headerList.add(headerEntry("Authorization", "Bearer {{token}}"));
+            }
+        } else {
+            headerList.add(headerEntry("Content-Type", "application/json"));
+            headerList.add(headerEntry("Authorization", "Bearer {{token}}"));
+        }
+        request.put("header", headerList);
+
+        // 请求体（从历史记录还原）
+        String requestBody = (String) apiMap.get("requestBody");
+        if (requestBody != null && !requestBody.isBlank() && !"null".equals(requestBody)) {
+            Map<String, Object> bodyObj = new LinkedHashMap<>();
+            bodyObj.put("mode", "raw");
+            try {
+                Object parsed = objectMapper.readValue(requestBody.replace('\n', ' ').trim(), Object.class);
+                bodyObj.put("raw", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(parsed));
+            } catch (Exception e) {
+                bodyObj.put("raw", requestBody);
+            }
+            Map<String, Object> options = new LinkedHashMap<>();
+            options.put("raw", Map.of("language", "json"));
+            bodyObj.put("options", options);
+            request.put("body", bodyObj);
+        }
+
+        item.put("request", request);
+
+        // 标准响应示例
+        List<Map<String, Object>> responses = new ArrayList<>();
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("name", "成功响应");
+        resp.put("code", 200);
+        resp.put("status", "OK");
+        Map<String, Object> respBody = new LinkedHashMap<>();
+        respBody.put("mode", "raw");
+        respBody.put("raw", "{\"code\": 200, \"message\": \"操作成功\", \"data\": {}}");
+        resp.put("body", respBody);
+        responses.add(resp);
+        item.put("response", responses);
+
         return item;
     }
 
@@ -678,18 +1194,25 @@ public class CaptureController {
         return collection;
     }
 
-    /** Apifox 条目 — 简化版，直接使用完整真实 URL 字符串 */
+    /** Apifox 条目 — 中文名称 + 完整响应示例 */
     private Map<String, Object> buildApifoxItem(ApiAsset a) {
+        // 中文接口名称
+        String apiName = inferExportApiName(a.getMethod(), a.getUrl());
+        String resPath = a.getResource() != null ? a.getResource() : getPath(a.getUrl());
+        String displayName = !apiName.equals(a.getMethod()) ? apiName : a.getMethod() + " " + resPath;
+
         Map<String, Object> item = new LinkedHashMap<>();
-        item.put("name", a.getMethod() + " " + (a.getResource() != null ? a.getResource() : getPath(a.getUrl())));
+        item.put("name", displayName);
+        item.put("description", apiName + "\n\n完整地址: " + a.getUrl());
 
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("method", a.getMethod());
+        request.put("description", apiName);
 
-        // Apifox 兼容: url 直接使用字符串格式（非对象格式），避免导入识别问题
+        // Apifox 兼容: url 直接使用字符串格式
         request.put("url", a.getUrl());
 
-        // Headers（从 ApiAsset.getHeaders() 获取，而非 request map）
+        // Headers
         List<Map<String, String>> headerList = new ArrayList<>();
         Map<String, String> headers = a.getHeaders();
         if (headers != null) {
@@ -698,11 +1221,12 @@ public class CaptureController {
                 Map<String, String> he = new LinkedHashMap<>();
                 he.put("key", h.getKey());
                 he.put("value", h.getValue());
+                he.put("description", "请求头");
                 headerList.add(he);
             }
         }
         if (headerList.isEmpty()) {
-            headerList.add(Map.of("key", "Content-Type", "value", "application/json"));
+            headerList.add(Map.of("key", "Content-Type", "value", "application/json", "description", "请求体格式"));
         }
         request.put("header", headerList);
 
@@ -720,19 +1244,21 @@ public class CaptureController {
 
         item.put("request", request);
 
-        // Response
+        // Response — 结构化 code/data/message
         List<Map<String, Object>> responses = new ArrayList<>();
         Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("name", "Response " + a.getStatusCode());
+        resp.put("name", "成功响应 " + a.getStatusCode());
         resp.put("code", a.getStatusCode());
         resp.put("status", String.valueOf(a.getStatusCode()));
-        Object resBody = a.getResponse().get("body");
-        if (resBody != null && !resBody.toString().isBlank() && !"null".equals(resBody.toString())) {
-            Map<String, Object> bodyObj = new LinkedHashMap<>();
-            bodyObj.put("mode", "raw");
-            bodyObj.put("raw", formatBody(resBody));
-            resp.put("body", bodyObj);
+        Map<String, Object> bodyObj = new LinkedHashMap<>();
+        bodyObj.put("mode", "raw");
+        Map<String, Object> example = buildResponseExample(a);
+        try {
+            bodyObj.put("raw", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(example));
+        } catch (Exception e) {
+            bodyObj.put("raw", "{\"code\": 200, \"message\": \"操作成功\", \"data\": {}}");
         }
+        resp.put("body", bodyObj);
         responses.add(resp);
         item.put("response", responses);
 
@@ -859,12 +1385,16 @@ public class CaptureController {
 
     private Map<String, Object> buildPostmanItem(ApiAsset a, Map<String, String> envVars) {
         Map<String, Object> item = new LinkedHashMap<>();
-        String itemName = a.getMethod() + " " + getPath(a.getUrl());
-        if (a.getBusinessStep() != null) itemName += " (" + a.getBusinessStep() + ")";
-        item.put("name", itemName);
+        String apiName = inferExportApiName(a.getMethod(), a.getUrl());
+        String resPath = getPath(a.getUrl());
+        String displayName = !apiName.equals(a.getMethod()) ? apiName : a.getMethod() + " " + resPath;
+        if (a.getBusinessStep() != null) displayName += " (" + a.getBusinessStep() + ")";
+        item.put("name", displayName);
+        item.put("description", apiName + "\n\n完整地址: " + a.getUrl());
 
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("method", a.getMethod());
+        request.put("description", apiName);
         request.put("url", buildUrlObj(a.getUrl(), envVars));
 
         // Headers（自动替换变量）
@@ -891,14 +1421,18 @@ public class CaptureController {
 
         item.put("request", request);
 
-        // Response
+        // Response — 结构化 code/data/message
         List<Map<String, Object>> responses = new ArrayList<>();
         Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("name", "Response " + a.getStatusCode());
+        resp.put("name", "成功响应");
         resp.put("status", String.valueOf(a.getStatusCode()));
         resp.put("code", a.getStatusCode());
-        Object resBody = a.getResponse().get("body");
-        if (resBody != null) resp.put("body", formatBody(resBody));
+        Map<String, Object> example = buildResponseExample(a);
+        try {
+            resp.put("body", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(example));
+        } catch (Exception e) {
+            resp.put("body", "{\"code\": 200, \"message\": \"ok\"}");
+        }
         responses.add(resp);
         item.put("response", responses);
 
@@ -932,16 +1466,27 @@ public class CaptureController {
                     urlObj.put("path", pathList);
                 }
             }
+            // 过滤空值 query 参数，避免服务器 400
             String query = uri.getQuery();
+            String cleanQuery = "";
             if (query != null && !query.isEmpty()) {
                 List<Map<String, String>> qp = new ArrayList<>();
+                StringBuilder qb = new StringBuilder();
                 for (String param : query.split("&")) {
                     String[] kv = param.split("=", 2);
-                    qp.add(paramEntry(kv[0], kv.length > 1 ? kv[1] : ""));
+                    String val = kv.length > 1 ? kv[1] : "";
+                    if (val.isEmpty()) continue;
+                    qp.add(paramEntry(kv[0], val));
+                    if (qb.length() > 0) qb.append("&");
+                    qb.append(kv[0]).append("=").append(val);
                 }
-                urlObj.put("query", qp);
+                if (!qp.isEmpty()) {
+                    urlObj.put("query", qp);
+                    cleanQuery = qb.toString();
+                }
             }
-            urlObj.put("raw", "{{baseUrl}}" + (path != null ? path : "") + (query != null ? "?" + query : ""));
+            urlObj.put("raw", "{{baseUrl}}" + (path != null ? path : "")
+                    + (cleanQuery.isEmpty() ? "" : "?" + cleanQuery));
         } catch (Exception e) {
             urlObj.put("raw", fullUrl);
         }
@@ -966,7 +1511,7 @@ public class CaptureController {
         String prompt = buildTestCasesPrompt(assets, flowCtx);
         String aiResponse;
         try {
-            aiResponse = aiChatService.chat("testcases", prompt);
+            aiResponse = aiAnalyzeService.chat(prompt);
         } catch (Exception e) {
             log.warn("AI 测试用例生成调用失败: {}", e.getMessage());
             return Map.of("error", "AI 服务不可用: " + e.getMessage());
@@ -1062,7 +1607,7 @@ public class CaptureController {
         String prompt = buildScenariosPrompt(assets);
         String aiResponse;
         try {
-            aiResponse = aiChatService.chat("scenarios", prompt);
+            aiResponse = aiAnalyzeService.chat(prompt);
         } catch (Exception e) {
             log.warn("AI 场景识别调用失败: {}", e.getMessage());
             return Map.of("error", "AI 服务不可用: " + e.getMessage());
@@ -1175,5 +1720,98 @@ public class CaptureController {
         p.put("key", key);
         p.put("value", value);
         return p;
+    }
+
+    // ==================== 导出增强：中文名称 + 环境变量 ====================
+
+    /** 从 URL 推断中文接口名称，用于导出 */
+    private String inferExportApiName(String method, String url) {
+        if (url == null) return method;
+        String lower = url.toLowerCase();
+
+        if (lower.contains("login") || lower.contains("signin")) return "用户登录";
+        if (lower.contains("register") || lower.contains("signup")) return "用户注册";
+        if (lower.contains("logout") || lower.contains("signout")) return "退出登录";
+        if (lower.contains("captcha")) return "获取验证码";
+        if (lower.contains("refresh") || lower.contains("token")) return "刷新令牌";
+        if (lower.contains("search")) return "搜索";
+        if (lower.contains("follow") && (lower.contains("unfollow") || lower.contains("batch"))) return "";
+        if (lower.contains("follow")) return "关注用户";
+        if (lower.contains("unfollow")) return "取消关注";
+        if (lower.contains("comment") || lower.contains("reply")) return "评论";
+        if (lower.contains("like") || lower.contains("favorite") || lower.contains("star")) return "收藏/点赞";
+        if (lower.contains("share")) return "分享";
+        if (lower.contains("detail") || lower.contains("info")) return "查看详情";
+        if (lower.contains("list") || lower.contains("page") || lower.contains("feed")) return "列表查询";
+        if (lower.contains("create") || lower.contains("publish") || lower.contains("add")) return "创建";
+        if (lower.contains("update") || lower.contains("edit") || lower.contains("modify")) return "编辑";
+        if (lower.contains("delete") || lower.contains("remove")) return "删除";
+        if (lower.contains("upload")) return "上传文件";
+        if (lower.contains("download") || lower.contains("export")) return "下载/导出";
+        if (lower.contains("setting") || lower.contains("config")) return "系统设置";
+        if (lower.contains("notification") || lower.contains("notice") || lower.contains("message")) return "消息通知";
+        if (lower.contains("recommend") || lower.contains("suggest") || lower.contains("hot")) return "推荐/热门";
+        if (lower.contains("report") || lower.contains("stat") || lower.contains("rank")) return "数据统计";
+        if (lower.contains("membership") || lower.contains("vip")) return "会员";
+        if (lower.contains("points") || lower.contains("coin") || lower.contains("balance")) return "积分/余额";
+        if (lower.contains("view") || lower.contains("get") || lower.contains("query")) return "查询";
+
+        if ("GET".equalsIgnoreCase(method)) return "查询";
+        if ("POST".equalsIgnoreCase(method)) return "提交";
+        if ("PUT".equalsIgnoreCase(method) || "PATCH".equalsIgnoreCase(method)) return "更新";
+        if ("DELETE".equalsIgnoreCase(method)) return "删除";
+        return method;
+    }
+
+    /** 生成模拟响应示例，用于导出时 Apifox 可识别结构 */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildResponseExample(ApiAsset a) {
+        Map<String, Object> example = new LinkedHashMap<>();
+        example.put("code", 200);
+        example.put("message", "操作成功");
+        example.put("data", null);
+
+        Object resBody = a.getResponse().get("body");
+        if (resBody != null && !resBody.toString().isBlank() && !"null".equals(resBody.toString())) {
+            try {
+                Object parsed = objectMapper.readValue(resBody.toString(), Object.class);
+                example.put("data", parsed);
+            } catch (Exception e) {
+                example.put("data", resBody.toString());
+            }
+        }
+        return example;
+    }
+
+    @GetMapping("/capture/export/environment")
+    public ResponseEntity<Map<String, Object>> exportEnvironment() {
+        List<ApiAsset> assets = apiCaptureService.getLastResult();
+        String mainDomain = apiCaptureService.getMainDomain();
+        String baseUrl = "https://" + (mainDomain != null ? mainDomain : "unknown");
+
+        Map<String, String> vars = extractAllVariables(assets);
+
+        Map<String, Object> env = new LinkedHashMap<>();
+        env.put("name", (mainDomain != null ? mainDomain : "API") + " 环境");
+        List<Map<String, Object>> values = new ArrayList<>();
+
+        // baseUrl 总是第一个
+        Map<String, Object> baseEntry = new LinkedHashMap<>();
+        baseEntry.put("key", "baseUrl");
+        baseEntry.put("value", baseUrl);
+        baseEntry.put("type", "default");
+        values.add(baseEntry);
+
+        // 提取的变量
+        for (Map.Entry<String, String> e : vars.entrySet()) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("key", e.getKey());
+            entry.put("value", e.getValue());
+            entry.put("type", "default");
+            values.add(entry);
+        }
+
+        env.put("values", values);
+        return ResponseEntity.ok(env);
     }
 }

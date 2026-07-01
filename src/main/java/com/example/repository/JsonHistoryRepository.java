@@ -51,15 +51,26 @@ public class JsonHistoryRepository implements HistoryRepository {
             MAPPER.writeValue(recordFile, record);
             log.debug("历史记录已保存: {}", recordFile.getAbsolutePath());
 
-            // 更新索引
+            // 更新索引（replace or insert）
             List<Map<String, Object>> index = readIndex();
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("id", record.getId());
             entry.put("title", record.getTitle());
             entry.put("createdAt", record.getCreatedAt());
             entry.put("apiCount", record.getApiCount());
-            // 插入到最前面（最新的在前）
-            index.add(0, entry);
+
+            // 如果已存在则替换，否则插入到最前面
+            boolean replaced = false;
+            for (int i = 0; i < index.size(); i++) {
+                if (record.getId().equals(index.get(i).get("id"))) {
+                    index.set(i, entry);
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) {
+                index.add(0, entry);
+            }
             MAPPER.writeValue(indexPath.toFile(), index);
 
         } catch (IOException e) {

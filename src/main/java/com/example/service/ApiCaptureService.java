@@ -202,6 +202,23 @@ public class ApiCaptureService {
         return lastResult;
     }
 
+    /**
+     * 从外部加载数据到当前会话（用于历史记录回放）。
+     * 调用后所有 /capture/* 接口都会操作这份数据。
+     */
+    public void setLastResult(List<ApiAsset> assets) {
+        this.lastResult = assets;
+        // 重新推断主域名
+        if (assets != null && !assets.isEmpty()) {
+            for (ApiAsset a : assets) {
+                if (a.getDomain() != null) {
+                    this.mainDomain = a.getDomain();
+                    break;
+                }
+            }
+        }
+    }
+
     public BusinessFlow getLastFlow() {
         return lastFlow;
     }

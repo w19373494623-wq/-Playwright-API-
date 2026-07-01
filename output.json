@@ -1,0 +1,937 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "funhub-web-test.guadd.fun - UGC 业务接口文档",
+    "description": "本接口文档基于浏览器录制自动生成，覆盖 UGC 内容浏览、发布、互动等核心业务场景。适用于功能测试、自动化测试及开发联调。",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://funhub-web-test.guadd.fun",
+      "description": "测试环境"
+    }
+  ],
+  "paths": {
+    "/api/ugc/superTopic/list": {
+      "get": {
+        "tags": ["内容模块"],
+        "summary": "获取超级话题列表",
+        "description": "用户进入话题广场时调用，获取当前平台所有超级话题的列表数据，包含话题名称、封面图、参与人数等信息，用于前端话题广场展示。",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "分页游标，首次请求传空，后续翻页传入上次返回的游标值",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "每页返回数量，默认 10，最大 50",
+            "schema": { "type": "integer", "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回超级话题列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "list": [
+                      {
+                        "topicId": "topic_6a0a94fa81e5e769b8f0a7e6",
+                        "name": "摄影爱好者",
+                        "coverUrl": "https://cdn.guadd.fun/cover/xxx.jpg",
+                        "participantCount": 12580,
+                        "contentCount": 36420
+                      }
+                    ],
+                    "cursor": "next_page_cursor_value",
+                    "hasMore": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/competition/list": {
+      "get": {
+        "tags": ["内容模块"],
+        "summary": "获取竞赛活动列表",
+        "description": "用户在竞赛入口页面调用，获取当前进行中和已结束的竞赛活动列表，包含竞赛名称、时间、奖励信息等。",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "分页游标，首次请求不传",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "每页返回数量",
+            "schema": { "type": "integer", "default": 10 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "竞赛状态筛选：进行中（ongoing）、已结束（finished）、全部（空值）",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回竞赛列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "list": [
+                      {
+                        "competitionId": "comp_001",
+                        "name": "七月创作大赛",
+                        "startTime": "2026-07-01T00:00:00Z",
+                        "endTime": "2026-07-31T23:59:59Z",
+                        "reward": "现金奖励 1000 元",
+                        "participantCount": 3250
+                      }
+                    ],
+                    "cursor": "",
+                    "hasMore": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/recommand/ugcList": {
+      "get": {
+        "tags": ["内容模块"],
+        "summary": "获取推荐 UGC 内容列表",
+        "description": "首页推荐流核心接口，根据用户兴趣标签和浏览历史，返回个性化的 UGC 内容列表，支持分页滚动加载。",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "分页游标，首次请求不传",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "每页返回数量",
+            "schema": { "type": "integer", "default": 20 }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "排序方式：最新（latest）、最热（hot）、推荐（recommend）",
+            "schema": { "type": "string", "default": "recommend" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回推荐内容列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "list": [
+                      {
+                        "ugcId": "ugc_001",
+                        "type": "video",
+                        "title": "我的摄影作品集",
+                        "coverUrl": "https://cdn.guadd.fun/cover/abc.jpg",
+                        "author": {
+                          "userId": "6a2a1c1f7d8b5fad864dd959",
+                          "nickname": "摄影爱好者",
+                          "avatarUrl": "https://cdn.guadd.fun/avatar/def.jpg"
+                        },
+                        "likeCount": 328,
+                        "commentCount": 45,
+                        "publishTime": "2026-06-30T10:30:00Z"
+                      }
+                    ],
+                    "cursor": "next_cursor",
+                    "hasMore": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/following/publishers/ugcList": {
+      "get": {
+        "tags": ["关注模块"],
+        "summary": "获取关注者发布列表",
+        "description": "用户在关注页查看所关注用户发布的最新内容，按时间倒序排列，支持游标分页。",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "分页游标，首次请求传空",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "每页返回的内容数量",
+            "schema": { "type": "integer", "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回关注者发布列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "list": [
+                      {
+                        "ugcId": "ugc_002",
+                        "authorId": "user_123",
+                        "authorName": "张三",
+                        "content": "今日份的日落🌇",
+                        "mediaUrl": "https://cdn.guadd.fun/media/xxx.mp4",
+                        "publishTime": "2026-06-30T18:00:00Z"
+                      }
+                    ],
+                    "cursor": "next_cursor_xxx",
+                    "hasMore": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/createUgc": {
+      "post": {
+        "tags": ["内容模块"],
+        "summary": "发布 UGC 内容",
+        "description": "用户编辑完成图文或视频内容后调用，将内容提交到服务器。支持文字、图片、视频等多种内容类型。提交成功后返回内容 ID 供后续操作使用。",
+        "parameters": [],
+        "requestBody": {
+          "description": "发布内容请求体，包含内容类型、标题、正文和媒体文件信息",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "contentType": {
+                    "type": "string",
+                    "description": "内容类型：text（纯文字）、image（图片）、video（视频）"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "内容标题，不超过 100 字"
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "内容正文，支持纯文本或富文本格式"
+                  },
+                  "mediaIds": {
+                    "type": "array",
+                    "description": "已上传的媒体文件 ID 列表，通过上传接口获取",
+                    "items": { "type": "string" }
+                  },
+                  "topicId": {
+                    "type": "string",
+                    "description": "关联的话题 ID，可选，发布到指定话题下"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "description": "可见性设置：public（公开）、private（仅自己可见）、followers（仅粉丝可见）",
+                    "default": "public"
+                  }
+                },
+                "required": ["contentType", "content"]
+              },
+              "example": {
+                "contentType": "video",
+                "title": "我的第一条 UGC 视频",
+                "content": "这是视频的描述文字",
+                "mediaIds": ["media_001", "media_002"],
+                "topicId": "topic_6a0a94fa81e5e769b8f0a7e6",
+                "visibility": "public"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "发布成功，返回新创建的内容 ID",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "发布成功",
+                  "data": {
+                    "ugcId": "ugc_new_001",
+                    "publishTime": "2026-07-01T14:30:00Z",
+                    "status": "published"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数校验失败，如缺少必填字段、内容超长等",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 400,
+                  "message": "内容正文不能为空",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/community/getUploadPresignedURL": {
+      "post": {
+        "tags": ["社区模块"],
+        "summary": "获取上传预签名地址",
+        "description": "用户上传图片或视频前调用，服务端返回一个预签名的上传 URL，客户端直接向该 URL 上传文件。支持图片、视频、音频等媒体类型。",
+        "parameters": [],
+        "requestBody": {
+          "description": "申请上传凭证，指定文件名、大小和类型",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fileName": {
+                    "type": "string",
+                    "description": "原始文件名，包含扩展名，用于服务端判断文件类型"
+                  },
+                  "fileSize": {
+                    "type": "integer",
+                    "description": "文件大小，单位字节，用于校验上传限额"
+                  },
+                  "fileType": {
+                    "type": "string",
+                    "description": "文件 MIME 类型，如 image/jpeg、video/mp4"
+                  },
+                  "businessType": {
+                    "type": "string",
+                    "description": "业务类型：ugc_cover（内容封面）、ugc_media（内容媒体）、avatar（头像）"
+                  }
+                },
+                "required": ["fileName", "fileSize", "fileType", "businessType"]
+              },
+              "example": {
+                "fileName": "my_video.mp4",
+                "fileSize": 52428800,
+                "fileType": "video/mp4",
+                "businessType": "ugc_media"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功返回预签名上传地址和文件访问标识",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "uploadUrl": "https://cdn-bucket.guadd.fun/xxx-yyy?sign=abc123",
+                    "mediaId": "media_001",
+                    "expireIn": 3600,
+                    "cdnDomain": "https://cdn.guadd.fun"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/viewUserInfo": {
+      "get": {
+        "tags": ["用户模块"],
+        "summary": "查看用户信息",
+        "description": "查看指定用户的个人主页信息，包括昵称、头像、签名、粉丝数、关注数、获赞数等。可查看其他用户的信息页。",
+        "parameters": [
+          {
+            "name": "target_user_id",
+            "in": "query",
+            "required": true,
+            "description": "目标用户 ID，指定要查看哪个用户的信息",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回用户信息",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "userId": "6a2a1c1f7d8b5fad864dd959",
+                    "nickname": "小明",
+                    "avatarUrl": "https://cdn.guadd.fun/avatar/xxx.jpg",
+                    "signature": "热爱生活，热爱摄影",
+                    "followerCount": 1280,
+                    "followingCount": 356,
+                    "likeReceivedCount": 5420,
+                    "ugcCount": 168,
+                    "isFollowed": true,
+                    "memberLevel": "vip2"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/points/balance": {
+      "get": {
+        "tags": ["用户模块"],
+        "summary": "查询积分余额",
+        "description": "查询当前登录用户的积分余额和积分明细概览。积分可用于兑换奖励、参与竞赛等。",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功返回积分余额信息",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "balance": 3680,
+                    "todayEarn": 50,
+                    "totalEarned": 12500,
+                    "expirePoints": 200,
+                    "expireDate": "2026-08-01"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/selfPublish/ugcList": {
+      "get": {
+        "tags": ["内容模块"],
+        "summary": "获取我发布的内容列表",
+        "description": "用户在个人主页查看自己发布过的所有 UGC 内容，按时间倒序排列，支持游标分页。",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "分页游标，首次请求不传",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "每页返回数量",
+            "schema": { "type": "integer", "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回我发布的内容列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "list": [
+                      {
+                        "ugcId": "ugc_010",
+                        "type": "image",
+                        "content": "今日份咖啡☕",
+                        "mediaUrl": "https://cdn.guadd.fun/media/xxx.jpg",
+                        "likeCount": 56,
+                        "commentCount": 12,
+                        "publishTime": "2026-06-29T08:30:00Z",
+                        "status": "published"
+                      }
+                    ],
+                    "cursor": "next_cursor",
+                    "hasMore": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/privacy/setting": {
+      "get": {
+        "tags": ["用户模块"],
+        "summary": "获取隐私设置",
+        "description": "查询当前用户的隐私偏好设置，包括谁可以查看发布内容、谁可以评论、是否允许他人下载等配置项。",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功返回隐私设置项",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "whoCanView": "everyone",
+                    "whoCanComment": "everyone",
+                    "allowDownload": true,
+                    "showOnlineStatus": true,
+                    "allowFollow": "everyone",
+                    "blockedUserIds": []
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/ugcDetail": {
+      "get": {
+        "tags": ["内容模块"],
+        "summary": "获取 UGC 内容详情",
+        "description": "查看单条 UGC 内容的完整详情，包含标题、正文、媒体文件、作者信息、点赞数、评论数、分享数等完整数据。",
+        "parameters": [
+          {
+            "name": "ugcId",
+            "in": "query",
+            "required": true,
+            "description": "内容 ID，指定要查看哪条内容的详情",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回内容详情",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "ugcId": "ugc_001",
+                    "title": "我的摄影作品集",
+                    "content": "这是一段详细的描述文字...",
+                    "type": "video",
+                    "mediaUrl": "https://cdn.guadd.fun/media/xxx.mp4",
+                    "coverUrl": "https://cdn.guadd.fun/cover/xxx.jpg",
+                    "author": {
+                      "userId": "user_123",
+                      "nickname": "摄影爱好者",
+                      "avatarUrl": "https://cdn.guadd.fun/avatar/xxx.jpg"
+                    },
+                    "likeCount": 328,
+                    "commentCount": 45,
+                    "shareCount": 23,
+                    "favoriteCount": 67,
+                    "isLiked": true,
+                    "isFavorited": false,
+                    "isFollowed": false,
+                    "publishTime": "2026-06-30T10:30:00Z",
+                    "tags": ["摄影", "风景"],
+                    "topicId": "topic_6a0a94fa81e5e769b8f0a7e6"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/ugcInfo/commentList": {
+      "get": {
+        "tags": ["内容模块"],
+        "summary": "获取评论列表",
+        "description": "查看某条 UGC 内容的评论列表，按时间正序排列。支持分页加载，评论包含用户信息、内容、点赞数和回复数。",
+        "parameters": [
+          {
+            "name": "ugcId",
+            "in": "query",
+            "required": true,
+            "description": "内容 ID，指定查看哪条内容的评论",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "分页游标，首次请求不传",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "每页返回的评论数量",
+            "schema": { "type": "integer", "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回评论列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "list": [
+                      {
+                        "commentId": "comment_001",
+                        "userId": "user_456",
+                        "nickname": "张三",
+                        "avatarUrl": "https://cdn.guadd.fun/avatar/yyy.jpg",
+                        "content": "拍得真棒！👍",
+                        "likeCount": 12,
+                        "replyCount": 3,
+                        "createTime": "2026-06-30T11:00:00Z",
+                        "isLiked": false
+                      }
+                    ],
+                    "cursor": "next_cursor",
+                    "hasMore": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/selfFavorite/ugcList": {
+      "get": {
+        "tags": ["用户模块"],
+        "summary": "获取我收藏的内容列表",
+        "description": "用户在个人主页查看自己收藏过的所有 UGC 内容，按收藏时间倒序排列。",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "分页游标，首次请求不传",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "每页返回数量",
+            "schema": { "type": "integer", "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回收藏列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "list": [
+                      {
+                        "ugcId": "ugc_005",
+                        "title": "风景摄影教程",
+                        "type": "video",
+                        "authorName": "李四",
+                        "coverUrl": "https://cdn.guadd.fun/cover/zzz.jpg",
+                        "favoriteTime": "2026-06-28T15:00:00Z"
+                      }
+                    ],
+                    "cursor": "next_cursor",
+                    "hasMore": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/membership/status": {
+      "get": {
+        "tags": ["用户模块"],
+        "summary": "查询会员状态",
+        "description": "查询当前登录用户的会员等级、权益和有效期。用于前端展示会员标识和权限控制。",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功返回会员状态信息",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "level": "vip2",
+                    "levelName": "黄金会员",
+                    "validUntil": "2026-12-31T23:59:59Z",
+                    "isAutoRenew": true,
+                    "benefits": ["高清画质", "去广告", "专属标识", "优先客服"],
+                    "daysRemaining": 183
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/topic/hotList": {
+      "get": {
+        "tags": ["内容模块"],
+        "summary": "获取热门话题列表",
+        "description": "获取当前平台最热门的话题列表，包含话题名称、参与人数、热度值等，用于话题广场或侧边栏展示。",
+        "parameters": [
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "返回热门话题数量",
+            "schema": { "type": "integer", "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回热门话题列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "list": [
+                      {
+                        "topicId": "topic_hot_001",
+                        "name": "旅行摄影",
+                        "participantCount": 25800,
+                        "contentCount": 89200,
+                        "heatScore": 98500
+                      },
+                      {
+                        "topicId": "topic_hot_002",
+                        "name": "美食打卡",
+                        "participantCount": 21300,
+                        "contentCount": 75600,
+                        "heatScore": 87200
+                      }
+                    ],
+                    "total": 50
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/batchCheckUserFollowStatus": {
+      "post": {
+        "tags": ["关注模块"],
+        "summary": "批量检查用户关注状态",
+        "description": "批量查询当前登录用户与多个目标用户的关注关系。用于列表页展示每个内容作者是否已被当前用户关注。",
+        "parameters": [],
+        "requestBody": {
+          "description": "批量查询的关注目标用户 ID 列表",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetUserIds": {
+                    "type": "array",
+                    "description": "目标用户 ID 列表，最多一次查询 50 个",
+                    "items": { "type": "string" }
+                  }
+                },
+                "required": ["targetUserIds"]
+              },
+              "example": {
+                "targetUserIds": ["user_001", "user_002", "user_003"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功返回各用户的关注状态映射",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "relations": {
+                      "user_001": { "isFollowed": true, "isFollowMe": false },
+                      "user_002": { "isFollowed": false, "isFollowMe": true },
+                      "user_003": { "isFollowed": false, "isFollowMe": false }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/followUser": {
+      "post": {
+        "tags": ["关注模块"],
+        "summary": "关注用户",
+        "description": "当前登录用户关注指定目标用户。关注后可在关注页看到该用户发布的内容。如果已关注则返回已关注状态。",
+        "parameters": [],
+        "requestBody": {
+          "description": "关注操作请求体，指定要关注的用户 ID",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetUserId": {
+                    "type": "string",
+                    "description": "要关注的用户 ID"
+                  }
+                },
+                "required": ["targetUserId"]
+              },
+              "example": {
+                "targetUserId": "user_001"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "关注成功或已关注",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "关注成功",
+                  "data": {
+                    "isFollowed": true,
+                    "followTime": "2026-07-01T14:30:00Z"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ugc/topic/contentList": {
+      "get": {
+        "tags": ["内容模块"],
+        "summary": "获取话题内容列表",
+        "description": "用户进入某话题详情页时调用，获取该话题下的所有 UGC 内容列表。支持多种排序方式和游标分页。",
+        "parameters": [
+          {
+            "name": "topicId",
+            "in": "query",
+            "required": true,
+            "description": "话题 ID，指定查看哪个话题下的内容",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "分页游标，首次请求不传",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "每页返回内容数量",
+            "schema": { "type": "integer", "default": 10 }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "排序方式：latest（最新发布）、hot（最热）、recommend（推荐）",
+            "schema": { "type": "string", "default": "latest" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回话题下的内容列表",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 200,
+                  "message": "操作成功",
+                  "data": {
+                    "list": [
+                      {
+                        "ugcId": "ugc_003",
+                        "type": "image",
+                        "title": "话题封面作品",
+                        "author": {
+                          "userId": "user_789",
+                          "nickname": "王五"
+                        },
+                        "likeCount": 89,
+                        "commentCount": 15,
+                        "publishTime": "2026-06-30T12:00:00Z"
+                      }
+                    ],
+                    "cursor": "next_cursor",
+                    "hasMore": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

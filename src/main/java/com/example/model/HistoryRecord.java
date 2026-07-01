@@ -18,6 +18,7 @@ public class HistoryRecord {
     private String summary;      // AI 总结（可为空）
     private Object businessFlow; // AI 业务链路（可为空）
     private List<ApiSummary> apis;
+    private java.util.Map<String, String> envVars; // 环境变量（token、userId 等）
 
     public HistoryRecord() {}
 
@@ -56,4 +57,7 @@ public class HistoryRecord {
 
     public List<ApiSummary> getApis() { return apis; }
     public void setApis(List<ApiSummary> apis) { this.apis = apis; }
+
+    public java.util.Map<String, String> getEnvVars() { return envVars; }
+    public void setEnvVars(java.util.Map<String, String> envVars) { this.envVars = envVars; }
 }
