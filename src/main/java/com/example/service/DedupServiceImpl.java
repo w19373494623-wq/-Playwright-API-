@@ -36,9 +36,36 @@ public class DedupServiceImpl implements DedupService {
             return new DedupResult(List.of(), 0, false, null);
         }
 
-        // Java 层硬过滤（图片、埋点、静态资源）+ 机械去重
+        // Java 层硬过滤（图片、埋点、静态资源）
         List<ApiAsset> filtered = apiPreFilter.filter(assets);
-        return fallbackDedup(filtered, null);
+
+        // 只保留 business / auth 类接口
+        List<ApiAsset> businessOnly = new ArrayList<>();
+        for (ApiAsset a : filtered) {
+            String cat = a.getCategory();
+            if ("business".equals(cat) || "auth".equals(cat)) {
+                businessOnly.add(a);
+            }
+        }
+        if (businessOnly.isEmpty()) {
+            return new DedupResult(List.of(), filtered.size(), false, null);
+        }
+
+        // AI 去重
+        try {
+            String prompt = buildPrompt(businessOnly);
+            String aiResponse = aiChatService.chat("dedup", prompt);
+            List<Map<String, Object>> parsed = aiResultParser.parseArray(aiResponse);
+            if (parsed != null && !parsed.isEmpty()) {
+                log.info("AI 去重成功: {} 项（原始 {} 条）", parsed.size(), businessOnly.size());
+                return new DedupResult(parsed, businessOnly.size(), false, aiResponse);
+            }
+        } catch (Exception e) {
+            log.warn("AI 去重失败: {}", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+        }
+
+        // 回退到机械去重
+        return fallbackDedup(businessOnly, null);
     }
 
     private String buildPrompt(List<ApiAsset> assets) {
@@ -96,8 +123,10 @@ public class DedupServiceImpl implements DedupService {
             String key = entry.getKey();
             String normalizedRes = key.substring(key.indexOf(' ') + 1);
             Map<String, Object> item = new LinkedHashMap<>();
+            String apiName = inferApiName(a.getMethod(), a.getUrl());
             item.put("method", a.getMethod());
             item.put("resource", normalizedRes);
+            item.put("apiName", apiName);
             item.put("urlExample", a.getUrl());
             item.put("callCount", mergedUrls.get(key).size());
             if (mergedUrls.get(key).size() > 1) {
@@ -119,6 +148,61 @@ public class DedupServiceImpl implements DedupService {
         // 匹配纯数字 ID
         normalized = normalized.replaceAll("/\\d{3,}(?=/|$)", "/{id}");
         return normalized;
+    }
+
+    /** 从 URL 推断接口名称（备注），用于机械去重兜底 */
+    private String inferApiName(String method, String url) {
+        if (url == null) return method;
+        String lower = url.toLowerCase();
+        boolean isGet = "GET".equalsIgnoreCase(method);
+        boolean isPost = "POST".equalsIgnoreCase(method);
+        boolean isWrite = "POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
+                || "PATCH".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method);
+
+        // ── 鉴权类（不分方法）──
+        if (lower.contains("login") || lower.contains("signin")) return "用户登录";
+        if (lower.contains("register") || lower.contains("signup")) return "用户注册";
+        if (lower.contains("logout") || lower.contains("signout")) return "退出登录";
+        if (lower.contains("captcha")) return "验证码";
+        if (lower.contains("token") || lower.contains("refresh")) return "刷新令牌";
+
+        // ── GET 请求默认为查询类 ──
+        if (isGet) {
+            if (lower.contains("search")) return "搜索";
+            if (lower.contains("list") || lower.contains("page") || lower.contains("feed")) return "列表查询";
+            if (lower.contains("detail") || lower.contains("info")) return "查看详情";
+            if (lower.contains("profile") || lower.contains("avatar") || lower.contains("identity")
+                    || lower.contains("viewUser") || lower.contains("getUser")) return "用户信息";
+            if (lower.contains("membership") || lower.contains("membership") || lower.contains("coin")
+                    || lower.contains("points") || lower.contains("account") || lower.contains("balance")) return "账户信息";
+            if (lower.contains("hot") || lower.contains("recommend") || lower.contains("suggest")) return "推荐/热门";
+            if (lower.contains("setting") || lower.contains("config")) return "系统设置";
+            if (lower.contains("notification") || lower.contains("notice") || lower.contains("message")) return "消息通知";
+            if (lower.contains("stat") || lower.contains("rank") || lower.contains("report")) return "数据统计";
+            return "查询";
+        }
+
+        // ── 写操作 ──
+        if (lower.contains("follow") || lower.contains("subscribe")) return "关注/订阅";
+        if (lower.contains("unfollow") || lower.contains("unsubscribe")) return "取消关注";
+        if (lower.contains("favorite") || lower.contains("like") || lower.contains("star") || lower.contains("collect")) return "收藏/点赞";
+        if (lower.contains("comment") || lower.contains("reply") || lower.contains("review")) return "评论/回复";
+        if (lower.contains("share")) return "分享";
+        if (lower.contains("upload")) return "上传文件";
+        if (lower.contains("download") || lower.contains("export")) return "导出/下载";
+        if (lower.contains("delete") || lower.contains("remove") || lower.contains("cancel")) return "删除";
+        if (lower.contains("update") || lower.contains("edit") || lower.contains("modify") || lower.contains("change")) return "编辑/更新";
+        if (lower.contains("create") || lower.contains("add") || lower.contains("publish") || lower.contains("new")) return "创建/发布";
+        if (lower.contains("generate")) return "生成";
+
+        // ── 按 HTTP 方法兜底 ──
+        if (isWrite) {
+            if (lower.contains("list") || lower.contains("page") || lower.contains("detail") || lower.contains("info")) return "查询";
+            if (lower.contains("setting") || lower.contains("config")) return "系统设置";
+            if (lower.contains("stat") || lower.contains("report")) return "数据统计";
+            return "提交";
+        }
+        return "查询";
     }
 
     /** 从多个候选字段名中提取第一个非空值 */

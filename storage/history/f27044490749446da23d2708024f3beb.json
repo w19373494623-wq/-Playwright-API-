@@ -1,0 +1,159 @@
+{
+  "id" : "f27044490749446da23d2708024f3beb",
+  "title" : "funhub-web-test.guadd.fun - 2026-06-30 18:12",
+  "url" : "https://funhub-web-test.guadd.fun/ugc",
+  "mainDomain" : "funhub-web-test.guadd.fun",
+  "createdAt" : 1782814338242,
+  "duration" : 154,
+  "totalRaw" : 32,
+  "totalFiltered" : 35,
+  "apiCount" : 29,
+  "summary" : null,
+  "businessFlow" : null,
+  "apis" : [ {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/contentList",
+    "category" : "business",
+    "callCount" : 3
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/ugcInfo/publishComment",
+    "category" : "business",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/ugcInfo/commentList",
+    "category" : "business",
+    "callCount" : 2
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/unfavoriteUgc",
+    "category" : "business",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/unlikeUgc",
+    "category" : "business",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/likeUgc",
+    "category" : "business",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/favoriteUgc",
+    "category" : "business",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/ugc/api/im/token/generate",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/viewUserInfo",
+    "category" : "business",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/following/publishers/ugcList",
+    "category" : "business",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/membership/status",
+    "category" : "business",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/user/viewUserInfo",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/hotList",
+    "category" : "business",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/content/getRecommendSearchList",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/api/content/batchGetVideoDetail",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/joy/v1/points/tasks/progress",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/joy/v1/points/info",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/content/getAppComponent",
+    "category" : "business",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/batchCheckUserFollowStatus",
+    "category" : "business",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/api/interaction/batchQueryContentInteractions",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/interaction/getUserPublishUgcList",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/commerce/getCoinAccount",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/user/getMyMemberships",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/api/content/getVideoDetailFeed",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/api/content/getNewstVideoList",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/api/content/getPopularVideoList",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/api/content/matchAds",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "POST",
+    "resource" : "/api/user/login",
+    "category" : "third_party",
+    "callCount" : 1
+  }, {
+    "method" : "GET",
+    "resource" : "/api/user/getGuestIdentity",
+    "category" : "third_party",
+    "callCount" : 1
+  } ]
+}

@@ -1,0 +1,74 @@
+{
+  "id" : "633d2352cefa4a1290ef6b9abcd7acc1",
+  "title" : "funhub-web-test.guadd.fun - 2026-07-01 09:43",
+  "url" : "https://funhub-web-test.guadd.fun/ugc",
+  "mainDomain" : "funhub-web-test.guadd.fun",
+  "createdAt" : 1782870237532,
+  "duration" : 52,
+  "totalRaw" : 10,
+  "totalFiltered" : 19,
+  "apiCount" : 10,
+  "summary" : null,
+  "businessFlow" : null,
+  "apis" : [ {
+    "method" : "POST",
+    "resource" : "/api/ugc/unlikeUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/unlikeUgc"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/unfavoriteUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/unfavoriteUgc"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/favoriteUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/favoriteUgc"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/likeUgc",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/likeUgc"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/unfollowUser",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/unfollowUser"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/followUser",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/followUser"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/viewUserInfo",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/viewUserInfo"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/membership/status",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/membership/status"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/following/publishers/ugcList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/following/publishers/ugcList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/hotList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/topic/hotList"
+  } ]
+}

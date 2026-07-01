@@ -1,0 +1,134 @@
+{
+  "id" : "bb0525f89b22472bb5202be1965e3b89",
+  "title" : "funhub-web-test.guadd.fun - 2026-06-30 20:06",
+  "url" : "https://funhub-web-test.guadd.fun/ugc",
+  "mainDomain" : "funhub-web-test.guadd.fun",
+  "createdAt" : 1782821213376,
+  "duration" : 44,
+  "totalRaw" : 21,
+  "totalFiltered" : 23,
+  "apiCount" : 20,
+  "summary" : null,
+  "businessFlow" : null,
+  "apis" : [ {
+    "method" : "POST",
+    "resource" : "/api/ugc/batchCheckUserFollowStatus",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/batchCheckUserFollowStatus"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/ugcInfo/commentList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/ugcInfo/commentList"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/interaction/batchQueryContentInteractions",
+    "category" : "third_party",
+    "callCount" : 1,
+    "apiName" : "POST /api/interaction/batchQueryContentInteractions"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/content/getVideoDetailFeed",
+    "category" : "third_party",
+    "callCount" : 1,
+    "apiName" : "POST /api/content/getVideoDetailFeed"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/user/viewUserInfo",
+    "category" : "third_party",
+    "callCount" : 1,
+    "apiName" : "GET /api/user/viewUserInfo"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/interaction/getUserPublishUgcList",
+    "category" : "third_party",
+    "callCount" : 1,
+    "apiName" : "GET /api/interaction/getUserPublishUgcList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/commerce/getCoinAccount",
+    "category" : "third_party",
+    "callCount" : 1,
+    "apiName" : "GET /api/commerce/getCoinAccount"
+  }, {
+    "method" : "GET",
+    "resource" : "/joy/v1/points/info",
+    "category" : "third_party",
+    "callCount" : 1,
+    "apiName" : "GET /joy/v1/points/info"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/user/getMyMemberships",
+    "category" : "third_party",
+    "callCount" : 1,
+    "apiName" : "GET /api/user/getMyMemberships"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/unfollowUser",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/unfollowUser"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/ugc/followUser",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "POST /api/ugc/followUser"
+  }, {
+    "method" : "POST",
+    "resource" : "/ugc/api/im/token/generate",
+    "category" : "third_party",
+    "callCount" : 1,
+    "apiName" : "POST /ugc/api/im/token/generate"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/following/publishers/ugcList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/following/publishers/ugcList"
+  }, {
+    "method" : "POST",
+    "resource" : "/api/user/login",
+    "category" : "third_party",
+    "callCount" : 1,
+    "apiName" : "POST /api/user/login"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/viewUserInfo",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/viewUserInfo"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/membership/status",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/membership/status"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/contentList",
+    "category" : "business",
+    "callCount" : 2,
+    "apiName" : "GET /api/ugc/topic/contentList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/user/getGuestIdentity",
+    "category" : "third_party",
+    "callCount" : 1,
+    "apiName" : "GET /api/user/getGuestIdentity"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/content/getRecommendSearchList",
+    "category" : "third_party",
+    "callCount" : 1,
+    "apiName" : "GET /api/content/getRecommendSearchList"
+  }, {
+    "method" : "GET",
+    "resource" : "/api/ugc/topic/hotList",
+    "category" : "business",
+    "callCount" : 1,
+    "apiName" : "GET /api/ugc/topic/hotList"
+  } ]
+}

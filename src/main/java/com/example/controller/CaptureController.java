@@ -4,17 +4,21 @@ import com.example.model.AiContext;
 import com.example.model.ApiAsset;
 import com.example.model.BusinessFlow;
 import com.example.model.DedupResult;
+import com.example.model.HistoryRecord;
 import com.example.service.ActionRecognizer;
 import com.example.service.AiChatService;
 import com.example.service.ApiCaptureService;
 import com.example.service.DedupService;
+import com.example.service.HistoryService;
 import com.example.ai.parse.AiResultParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,31 +44,50 @@ public class CaptureController {
     private final AiChatService aiChatService;
     private final DedupService dedupService;
     private final AiResultParser aiResultParser;
+    private final HistoryService historyService;
 
     /** 最近一次 AI 去重结果，供导出使用 */
     private DedupResult lastDedupResult;
 
+    /** 录制开始时间戳 */
+    private long captureStartTime;
+
     public CaptureController(ApiCaptureService apiCaptureService,
                              AiChatService aiChatService,
                              DedupService dedupService,
-                             AiResultParser aiResultParser) {
+                             AiResultParser aiResultParser,
+                             HistoryService historyService) {
         this.apiCaptureService = apiCaptureService;
         this.aiChatService = aiChatService;
         this.dedupService = dedupService;
         this.aiResultParser = aiResultParser;
+        this.historyService = historyService;
     }
 
     // ==================== 基础录制 ====================
 
     @PostMapping("/capture/start")
     public String start(@RequestParam String url) {
+        captureStartTime = System.currentTimeMillis();
         apiCaptureService.start(url);
         return "浏览器已打开，请手动操作页面，操作完后调用 POST /capture/stop";
     }
 
     @PostMapping("/capture/stop")
     public List<ApiAsset> stop() {
-        return apiCaptureService.stopAndFilter();
+        List<ApiAsset> assets = apiCaptureService.stopAndFilter();
+
+        // 保存历史记录（第一阶段，不依赖 AI）
+        try {
+            String pageUrl = assets.isEmpty() ? null : assets.get(0).getPageUrl();
+            historyService.save(assets, apiCaptureService.getMainDomain(),
+                    pageUrl, captureStartTime > 0 ? captureStartTime : System.currentTimeMillis());
+        } catch (Exception e) {
+            log.error("保存历史记录失败", e);
+        }
+
+        captureStartTime = 0;
+        return assets;
     }
 
     /** 实时查看原始捕获（未经过滤），操作过程中可随时查看 */
@@ -314,6 +337,28 @@ public class CaptureController {
         if ("DELETE".equalsIgnoreCase(method)) return "删除数据";
 
         return "其他操作";
+    }
+
+    // ==================== 历史录制管理 ====================
+
+    @GetMapping("/capture/history")
+    public List<Map<String, Object>> historyList() {
+        return historyService.findAll();
+    }
+
+    @GetMapping("/capture/history/{id}")
+    public ResponseEntity<?> historyDetail(@PathVariable String id) {
+        HistoryRecord record = historyService.findById(id);
+        if (record == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(record);
+    }
+
+    @DeleteMapping("/capture/history/{id}")
+    public ResponseEntity<?> historyDelete(@PathVariable String id) {
+        historyService.deleteById(id);
+        return ResponseEntity.ok(Map.of("deleted", true, "id", id));
     }
 
     // ==================== AI 业务去重 ====================
