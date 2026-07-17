@@ -12,6 +12,7 @@ import com.example.service.AiChatService;
 import com.example.service.ApiCaptureService;
 import com.example.service.DedupService;
 import com.example.service.HistoryService;
+import com.example.service.ApifoxMergeService;
 import com.example.ai.parse.AiResultParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -50,6 +51,7 @@ public class CaptureController {
     private final DedupService dedupService;
     private final AiResultParser aiResultParser;
     private final HistoryService historyService;
+    private final ApifoxMergeService apifoxMergeService;
 
     /** 最近一次 AI 去重结果，供导出使用 */
     private DedupResult lastDedupResult;
@@ -57,18 +59,23 @@ public class CaptureController {
     /** 录制开始时间戳 */
     private long captureStartTime;
 
+    /** 当前加载到会话中的历史记录 ID（用于 AI 缓存判断） */
+    private String currentHistoryId;
+
     public CaptureController(ApiCaptureService apiCaptureService,
                              AiChatService aiChatService,
                              AiAnalyzeService aiAnalyzeService,
                              DedupService dedupService,
                              AiResultParser aiResultParser,
-                             HistoryService historyService) {
+                             HistoryService historyService,
+                             ApifoxMergeService apifoxMergeService) {
         this.apiCaptureService = apiCaptureService;
         this.aiChatService = aiChatService;
         this.aiAnalyzeService = aiAnalyzeService;
         this.dedupService = dedupService;
         this.aiResultParser = aiResultParser;
         this.historyService = historyService;
+        this.apifoxMergeService = apifoxMergeService;
     }
 
     // ==================== 基础录制 ====================
@@ -94,6 +101,7 @@ public class CaptureController {
             HistoryRecord record = historyService.save(assets, apiCaptureService.getMainDomain(),
                     pageUrl, captureStartTime > 0 ? captureStartTime : System.currentTimeMillis());
             historyId = record.getId();
+            this.currentHistoryId = historyId;
         } catch (Exception e) {
             log.error("保存历史记录失败", e);
         }
@@ -371,6 +379,51 @@ public class CaptureController {
         return ResponseEntity.ok(record);
     }
 
+    /**
+     * 获取完整项目快照。
+     * 包含完整接口资产和 AI 分析结果，用于项目恢复和详情展示。
+     */
+    @GetMapping("/capture/project/{id}")
+    public ResponseEntity<?> projectDetail(@PathVariable String id) {
+        HistoryRecord record = historyService.findById(id);
+        if (record == null) {
+            return ResponseEntity.notFound().build();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", record.getId());
+        result.put("title", record.getTitle());
+        result.put("mainDomain", record.getMainDomain());
+        result.put("createdAt", record.getCreatedAt());
+        result.put("updateTime", record.getUpdateTime());
+        result.put("duration", record.getDuration());
+        result.put("version", record.getVersion());
+        result.put("totalRaw", record.getTotalRaw());
+        result.put("totalFiltered", record.getTotalFiltered());
+        result.put("apiCount", record.getApiCount());
+
+        // 接口资产
+        result.put("apis", record.getApis());
+        result.put("assets", record.getAssets());
+
+        // 环境变量
+        result.put("envVars", record.getEnvVars());
+
+        // AI 分析结果（如果存在）
+        result.put("summary", record.getSummary());
+        result.put("businessFlow", record.getBusinessFlow());
+        result.put("scenarios", record.getScenarios());
+        result.put("dedupResult", record.getDedupResult());
+
+        // 扩展数据
+        result.put("aiAnalysis", record.getAiAnalysis());
+        result.put("smokeTestResults", record.getSmokeTestResults());
+
+        // 烟雾测试结果摘要
+        result.put("smokeTestResult", record.getSmokeTestResult());
+
+        return ResponseEntity.ok(result);
+    }
+
     @DeleteMapping("/capture/history/{id}")
     public ResponseEntity<?> historyDelete(@PathVariable String id) {
         historyService.deleteById(id);
@@ -386,6 +439,27 @@ public class CaptureController {
         }
         Map<String, Object> collection = buildApifoxCollectionFromHistory(record);
         return ResponseEntity.ok(collection);
+    }
+
+    /**
+     * 合并已有 Apifox Collection 与录制数据。
+     * 通过 method + path 匹配接口，补充请求/响应示例、请求头、状态码和环境变量。
+     */
+    @SuppressWarnings("unchecked")
+    @PostMapping("/capture/apifox/merge")
+    public ResponseEntity<?> mergeApifox(@RequestBody Map<String, Object> body) {
+        String historyId = (String) body.get("historyId");
+        Map<String, Object> apifoxCollection = (Map<String, Object>) body.get("apifoxCollection");
+        if (apifoxCollection == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "apifoxCollection 不能为空"));
+        }
+        try {
+            Map<String, Object> result = apifoxMergeService.merge(historyId, apifoxCollection);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.warn("Apifox 合并失败: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", "合并失败: " + e.getMessage()));
+        }
     }
 
     /**
@@ -448,6 +522,7 @@ public class CaptureController {
         }
 
         apiCaptureService.setLastResult(assets);
+        this.currentHistoryId = id;
         log.info("历史记录已加载到会话: id={}, title={}, apis={}", id, record.getTitle(), assets.size());
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -531,6 +606,23 @@ public class CaptureController {
         if (assets == null || assets.isEmpty()) {
             return Map.of("total", 0, "apis", List.of());
         }
+
+        // 检查缓存：如果 HistoryRecord 已有去重结果，直接返回
+        if (currentHistoryId != null) {
+            HistoryRecord record = historyService.findById(currentHistoryId);
+            if (record != null && record.getDedupResult() != null) {
+                DedupResult cached = record.getDedupResult();
+                log.info("AI去重返回缓存: historyId={}, total={}", currentHistoryId, cached.getTotal());
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("total", cached.getTotal());
+                map.put("totalRaw", cached.getTotalRaw());
+                map.put("apis", cached.getApis());
+                if (cached.getRawAiResponse() != null) map.put("raw", cached.getRawAiResponse());
+                if (cached.isFallback()) map.put("fallback", true);
+                return map;
+            }
+        }
+
         lastDedupResult = dedupService.dedup(assets);
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("total", lastDedupResult.getTotal());
@@ -538,6 +630,12 @@ public class CaptureController {
         map.put("apis", lastDedupResult.getApis());
         if (lastDedupResult.getRawAiResponse() != null) map.put("raw", lastDedupResult.getRawAiResponse());
         if (lastDedupResult.isFallback()) map.put("fallback", true);
+
+        // 保存到缓存
+        if (currentHistoryId != null) {
+            historyService.updateDedupResult(currentHistoryId, lastDedupResult);
+        }
+
         return map;
     }
 
@@ -548,6 +646,21 @@ public class CaptureController {
     public Map<String, Object> analyze() {
         List<ApiAsset> assets = apiCaptureService.getLastResult();
         if (assets == null || assets.isEmpty()) return Map.of("error", "没有捕获到任何请求");
+
+        // 检查缓存
+        if (currentHistoryId != null) {
+            HistoryRecord record = historyService.findById(currentHistoryId);
+            if (record != null && record.getAiAnalysis() != null
+                    && record.getAiAnalysis().containsKey("flowAnalysis")) {
+                log.info("AI业务链路返回缓存: historyId={}", currentHistoryId);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> cached = (Map<String, Object>) record.getAiAnalysis().get("flowAnalysis");
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("structured", cached);
+                result.put("assets", assets);
+                return result;
+            }
+        }
 
         AiContext ctx = apiCaptureService.getAiContext();
 
@@ -572,10 +685,15 @@ public class CaptureController {
             ctx.setFlowResult(parsed);
         }
 
+        // 保存到缓存
+        if (currentHistoryId != null) {
+            historyService.updateAiAnalysis(currentHistoryId, "flowAnalysis", parsed);
+        }
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("raw", aiResponse);
         result.put("structured", parsed);
-        result.put("assets", assets); // 回传含 AI 字段的完整资产
+        result.put("assets", assets);
         return result;
     }
 
@@ -1002,10 +1120,10 @@ public class CaptureController {
         return item;
     }
 
-    /** 从历史记录构建 Apifox Collection（用于烟雾测试） */
+    /** 从历史记录构建 Apifox Collection（用于 Apifox 导入） */
     private Map<String, Object> buildApifoxCollectionFromHistory(HistoryRecord record) {
         String baseUrl = "https://" + (record.getMainDomain() != null ? record.getMainDomain() : "unknown");
-        String name = (record.getTitle() != null ? record.getTitle() : "历史记录") + " - 烟雾测试";
+        String name = (record.getTitle() != null ? record.getTitle() : "历史记录") + " - Apifox导出";
 
         Map<String, Object> collection = new LinkedHashMap<>();
 
@@ -1027,10 +1145,21 @@ public class CaptureController {
         }
         collection.put("variable", varList);
 
-        // 按模块分组
+        // 优先使用完整资产（ApiAsset），降级到精简列表（ApiSummary）
+        List<ApiAsset> assets = record.getAssets();
         List<ApiSummary> apis = record.getApis();
         Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
-        if (apis != null) {
+
+        if (assets != null && !assets.isEmpty()) {
+            // 完整资产模式：中文名称 + 真实响应示例 + 状态码
+            for (ApiAsset a : assets) {
+                String resPath = a.getResource() != null ? a.getResource() : getPath(a.getUrl());
+                String module = inferModuleFromUrl(resPath);
+                grouped.computeIfAbsent(module, k -> new ArrayList<>())
+                       .add(buildApifoxItemFromHistoryAsset(a, baseUrl));
+            }
+        } else if (apis != null) {
+            // 降级到精简列表
             for (ApiSummary api : apis) {
                 String module = inferModuleFromUrl(api.getResource());
                 Map<String, Object> apiMap = new LinkedHashMap<>();
@@ -1040,7 +1169,8 @@ public class CaptureController {
                 apiMap.put("url", api.getUrl());
                 apiMap.put("headers", api.getHeaders());
                 apiMap.put("requestBody", api.getRequestBody());
-                grouped.computeIfAbsent(module, k -> new ArrayList<>()).add(apiMap);
+                grouped.computeIfAbsent(module, k -> new ArrayList<>())
+                       .add(buildApifoxItemFromHistoryApi(apiMap));
             }
         }
 
@@ -1048,19 +1178,177 @@ public class CaptureController {
         for (Map.Entry<String, List<Map<String, Object>>> entry : grouped.entrySet()) {
             Map<String, Object> folder = new LinkedHashMap<>();
             folder.put("name", entry.getKey());
-            List<Map<String, Object>> folderItems = new ArrayList<>();
-            for (Map<String, Object> dedupApi : entry.getValue()) {
-                folderItems.add(buildApifoxItemFromHistoryApi(dedupApi));
-            }
-            folder.put("item", folderItems);
+            folder.put("item", entry.getValue());
             items.add(folder);
         }
         collection.put("item", items);
 
+        // Pre-request Script: 当存在认证接口时，生成自动获取 Token 脚本
+        if (assets != null) {
+            boolean hasAuth = assets.stream().anyMatch(a -> "auth".equals(a.getCategory()));
+            if (hasAuth) {
+                List<Map<String, Object>> events = new ArrayList<>();
+                Map<String, Object> preReqEvent = new LinkedHashMap<>();
+                preReqEvent.put("listen", "prerequest");
+                Map<String, Object> script = new LinkedHashMap<>();
+                script.put("type", "text/javascript");
+                script.put("exec", List.of(
+                        "// 环境变量中无 token 时，自动从登录接口获取",
+                        "var token = pm.environment.get('token');",
+                        "if (!token) {",
+                        "    var loginUrl = pm.environment.get('baseUrl') + '/api/login';",
+                        "    var credentials = {",
+                        "        username: pm.environment.get('username') || 'test',",
+                        "        password: pm.environment.get('password') || 'test'",
+                        "    };",
+                        "    pm.sendRequest({",
+                        "        url: loginUrl,",
+                        "        method: 'POST',",
+                        "        header: { 'Content-Type': 'application/json' },",
+                        "        body: {",
+                        "            mode: 'raw',",
+                        "            raw: JSON.stringify(credentials)",
+                        "        }",
+                        "    }, function (err, res) {",
+                        "        if (!err) {",
+                        "            try {",
+                        "                var json = res.json();",
+                        "                var t = json.token || json.accessToken || (json.data && json.data.token);",
+                        "                if (t) {",
+                        "                    pm.environment.set('token', t);",
+                        "                    console.log('Token 已自动获取');",
+                        "                }",
+                        "            } catch(e) { console.log('解析登录响应失败: ' + e); }",
+                        "        } else {",
+                        "            console.log('登录请求失败: ' + err);",
+                        "        }",
+                        "    });",
+                        "}"
+                ));
+                preReqEvent.put("script", script);
+                events.add(preReqEvent);
+                collection.put("event", events);
+            }
+        }
+
         return collection;
     }
 
-    /** 从历史记录单条 API 构建 Apifox 条目 */
+    /**
+     * 从历史记录完整资产（ApiAsset）构建 Apifox 条目。
+     * 包含：中文名称、真实响应示例、状态码、请求体、query 参数。
+     */
+    private Map<String, Object> buildApifoxItemFromHistoryAsset(ApiAsset a, String baseUrl) {
+        // 中文接口名称：优先使用 AI 识别的业务名，其次 URL 推断
+        String businessName = a.getBusinessStep() != null && !a.getBusinessStep().isBlank()
+                ? a.getBusinessStep() : inferExportApiName(a.getMethod(), a.getUrl());
+        String resPath = a.getResource() != null ? a.getResource() : getPath(a.getUrl());
+        String displayName = !businessName.equals(a.getMethod()) ? businessName : a.getMethod() + " " + resPath;
+
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("name", displayName);
+        item.put("description", businessName + "\n\n完整地址: " + a.getUrl());
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("method", a.getMethod());
+        request.put("description", businessName);
+
+        // URL — {{baseUrl}} + path，含 path 参数和 query 参数
+        Map<String, Object> urlObj = new LinkedHashMap<>();
+        urlObj.put("raw", "{{baseUrl}}" + resPath);
+        try {
+            URI uri = URI.create(a.getUrl());
+            // path segments
+            String path = uri.getPath();
+            if (path != null && !path.isEmpty()) {
+                String[] segments = path.split("/");
+                List<String> pathList = new ArrayList<>();
+                for (String seg : segments) {
+                    if (!seg.isEmpty()) pathList.add(seg);
+                }
+                if (!pathList.isEmpty()) urlObj.put("path", pathList);
+            }
+            // query params
+            String q = uri.getQuery();
+            if (q != null && !q.isEmpty()) {
+                List<Map<String, String>> qp = new ArrayList<>();
+                for (String param : q.split("&")) {
+                    String[] kv = param.split("=", 2);
+                    String val = kv.length > 1 ? kv[1] : "";
+                    if (val.isEmpty()) continue;
+                    qp.add(paramEntry(kv[0], val));
+                }
+                if (!qp.isEmpty()) urlObj.put("query", qp);
+            }
+        } catch (Exception ignored) {}
+        request.put("url", urlObj);
+
+        // 请求头
+        List<Map<String, String>> headerList = new ArrayList<>();
+        if (a.getHeaders() != null && !a.getHeaders().isEmpty()) {
+            boolean hasAuth = false;
+            for (Map.Entry<String, String> h : a.getHeaders().entrySet()) {
+                String hk = h.getKey();
+                if ("host".equalsIgnoreCase(hk) || "content-length".equalsIgnoreCase(hk)) continue;
+                if ("authorization".equalsIgnoreCase(hk)) {
+                    hasAuth = true;
+                    headerList.add(headerEntry(hk, "Bearer {{token}}"));
+                } else if ("content-type".equalsIgnoreCase(hk)) {
+                    headerList.add(headerEntry("Content-Type", "application/json"));
+                } else {
+                    headerList.add(headerEntry(hk, h.getValue()));
+                }
+            }
+            if (!hasAuth) {
+                headerList.add(headerEntry("Authorization", "Bearer {{token}}"));
+            }
+        } else {
+            headerList.add(headerEntry("Content-Type", "application/json"));
+            headerList.add(headerEntry("Authorization", "Bearer {{token}}"));
+        }
+        request.put("header", headerList);
+
+        // 请求体
+        String reqBody = a.getRequestBody();
+        if (reqBody != null && !reqBody.isBlank() && !"null".equals(reqBody)) {
+            Map<String, Object> bodyObj = new LinkedHashMap<>();
+            bodyObj.put("mode", "raw");
+            try {
+                Object parsed = objectMapper.readValue(reqBody.replace('\n', ' ').trim(), Object.class);
+                bodyObj.put("raw", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(parsed));
+            } catch (Exception e) {
+                bodyObj.put("raw", reqBody);
+            }
+            Map<String, Object> options = new LinkedHashMap<>();
+            options.put("raw", Map.of("language", "json"));
+            bodyObj.put("options", options);
+            request.put("body", bodyObj);
+        }
+
+        item.put("request", request);
+
+        // 响应示例 — 使用真实响应数据
+        List<Map<String, Object>> responses = new ArrayList<>();
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("name", "响应 " + a.getStatusCode());
+        resp.put("code", a.getStatusCode());
+        resp.put("status", String.valueOf(a.getStatusCode()));
+        Map<String, Object> responseBody = new LinkedHashMap<>();
+        responseBody.put("mode", "raw");
+        Map<String, Object> example = buildResponseExample(a);
+        try {
+            responseBody.put("raw", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(example));
+        } catch (Exception e) {
+            responseBody.put("raw", "{\"code\": 200, \"message\": \"操作成功\", \"data\": {}}");
+        }
+        resp.put("body", responseBody);
+        responses.add(resp);
+        item.put("response", responses);
+
+        return item;
+    }
+
+    /** 从历史记录单条 API（精简模式）构建 Apifox 条目 */
     @SuppressWarnings("unchecked")
     private Map<String, Object> buildApifoxItemFromHistoryApi(Map<String, Object> apiMap) {
         String method = (String) apiMap.getOrDefault("method", "GET");
@@ -1598,7 +1886,17 @@ public class CaptureController {
      * }
      */
     @PostMapping("/capture/scenarios")
+    @SuppressWarnings("unchecked")
     public Map<String, Object> scenarios() {
+        // 缓存检查：当前项目已识别过场景则直接返回
+        if (currentHistoryId != null) {
+            HistoryRecord record = historyService.findById(currentHistoryId);
+            if (record != null && record.getScenarios() != null && !record.getScenarios().isEmpty()) {
+                log.info("AI场景返回缓存: historyId={}", currentHistoryId);
+                return Map.of("scenarios", record.getScenarios());
+            }
+        }
+
         List<ApiAsset> assets = apiCaptureService.getLastResult();
         if (assets == null || assets.isEmpty()) {
             return Map.of("scenarios", List.of());
@@ -1618,8 +1916,13 @@ public class CaptureController {
             return Map.of("error", "AI 返回格式异常", "raw", aiResponse);
         }
 
+        List<Map<String, Object>> scenarios = (List<Map<String, Object>>) parsed.get("scenarios");
+        if (currentHistoryId != null) {
+            historyService.updateScenarios(currentHistoryId, scenarios);
+        }
+
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("scenarios", parsed.get("scenarios"));
+        result.put("scenarios", scenarios);
         result.put("raw", aiResponse);
         return result;
     }

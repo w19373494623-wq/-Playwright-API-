@@ -4,12 +4,12 @@
   "url" : "https://funhub-web-test.guadd.fun/ugc",
   "mainDomain" : "funhub-web-test.guadd.fun",
   "createdAt" : 1784095924913,
+  "updateTime" : 1784195273509,
   "duration" : 205,
+  "version" : 2,
   "totalRaw" : 19,
   "totalFiltered" : 44,
   "apiCount" : 17,
-  "summary" : null,
-  "businessFlow" : null,
   "apis" : [ {
     "method" : "GET",
     "resource" : "/api/ugc/recommand/ugcList",
@@ -315,7 +315,276 @@
       "content-type" : "application/json"
     }
   } ],
+  "assets" : null,
+  "summary" : null,
+  "businessFlow" : null,
+  "scenarios" : [ {
+    "name" : "推荐列表浏览",
+    "description" : "查看推荐内容列表",
+    "steps" : [ {
+      "step" : 1,
+      "action" : "查看推荐列表",
+      "method" : "GET",
+      "resource" : "/api/ugc/recommand/ugcList",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/recommand/ugcList?cursor=&size=20"
+    } ]
+  }, {
+    "name" : "关注列表浏览",
+    "description" : "查看关注用户内容列表",
+    "steps" : [ {
+      "step" : 1,
+      "action" : "查看关注列表",
+      "method" : "GET",
+      "resource" : "/api/ugc/following/publishers/ugcList",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/following/publishers/ugcList?cursor=&size=20"
+    } ]
+  }, {
+    "name" : "超级话题浏览",
+    "description" : "查看超级话题列表",
+    "steps" : [ {
+      "step" : 1,
+      "action" : "查看超级话题列表",
+      "method" : "GET",
+      "resource" : "/api/ugc/superTopic/list",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/superTopic/list?keyword=&cursor=&size=4"
+    } ]
+  }, {
+    "name" : "发布内容",
+    "description" : "用户发布新内容",
+    "steps" : [ {
+      "step" : 1,
+      "action" : "创建内容",
+      "method" : "POST",
+      "resource" : "/api/ugc/createUgc",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/createUgc"
+    } ]
+  }, {
+    "name" : "点赞取消收藏",
+    "description" : "用户对内容进行点赞和取消收藏操作",
+    "steps" : [ {
+      "step" : 1,
+      "action" : "点赞内容",
+      "method" : "POST",
+      "resource" : "/api/ugc/likeUgc",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/likeUgc"
+    }, {
+      "step" : 2,
+      "action" : "生成IM令牌",
+      "method" : "POST",
+      "resource" : "/ugc/api/im/token/generate",
+      "url" : "https://test-base-api.guadd.fun/ugc/api/im/token/generate"
+    }, {
+      "step" : 3,
+      "action" : "取消收藏内容",
+      "method" : "POST",
+      "resource" : "/api/ugc/unfavoriteUgc",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/unfavoriteUgc"
+    } ]
+  }, {
+    "name" : "用户主页",
+    "description" : "查看用户主页信息并关注",
+    "steps" : [ {
+      "step" : 1,
+      "action" : "查看用户信息",
+      "method" : "GET",
+      "resource" : "/api/ugc/viewUserInfo",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/viewUserInfo?target_user_id=6a2a1c1f7d8b5fad864dd959"
+    }, {
+      "step" : 2,
+      "action" : "查看会员状态",
+      "method" : "GET",
+      "resource" : "/api/ugc/membership/status",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/membership/status"
+    }, {
+      "step" : 3,
+      "action" : "关注用户",
+      "method" : "POST",
+      "resource" : "/api/ugc/followUser",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/followUser"
+    } ]
+  }, {
+    "name" : "用户登录",
+    "description" : "用户登录系统",
+    "steps" : [ {
+      "step" : 1,
+      "action" : "用户登录",
+      "method" : "POST",
+      "resource" : "/api/user/login",
+      "url" : "https://truss-api-test.guadd.fun/api/user/login"
+    } ]
+  }, {
+    "name" : "热门话题",
+    "description" : "浏览热门话题列表并查看内容",
+    "steps" : [ {
+      "step" : 1,
+      "action" : "查看热门话题列表",
+      "method" : "GET",
+      "resource" : "/api/ugc/topic/hotList",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/topic/hotList"
+    }, {
+      "step" : 2,
+      "action" : "查看话题内容列表",
+      "method" : "GET",
+      "resource" : "/api/ugc/topic/contentList",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/topic/contentList?topicId=6a3b84027d36b14302d1538d&cursor=&size=10&sort=latest"
+    } ]
+  }, {
+    "name" : "竞赛列表",
+    "description" : "浏览竞赛列表",
+    "steps" : [ {
+      "step" : 1,
+      "action" : "查看竞赛列表",
+      "method" : "GET",
+      "resource" : "/api/ugc/competition/list",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/competition/list?cursor=eyJ0IjoiMTIzIiwiaSI6IjZhMmY2MjQ4ZDExZDMzYzQ4YTUyZjdkOSJ9&size=10"
+    } ]
+  }, {
+    "name" : "评论互动",
+    "description" : "用户查看帖子评论并发布评论",
+    "steps" : [ {
+      "step" : 1,
+      "action" : "查看评论列表",
+      "method" : "GET",
+      "resource" : "/api/ugc/ugcInfo/commentList",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/ugcInfo/commentList?ugcId=6a5091b50f57e71ff8f10619&cursor=&size=20&parentCommentId=&sortType=latest"
+    }, {
+      "step" : 2,
+      "action" : "发布评论",
+      "method" : "POST",
+      "resource" : "/api/ugc/ugcInfo/publishComment",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/ugcInfo/publishComment"
+    } ]
+  }, {
+    "name" : "内容详情页",
+    "description" : "查看帖子详情",
+    "steps" : [ {
+      "step" : 1,
+      "action" : "查看帖子详情",
+      "method" : "GET",
+      "resource" : "/api/ugc/ugcDetail",
+      "url" : "https://funhub-web-test.guadd.fun/api/ugc/ugcDetail?ugcId=6a5091b50f57e71ff8f10619"
+    } ]
+  } ],
+  "dedupResult" : {
+    "apis" : [ {
+      "method" : "GET",
+      "resource" : "/api/ugc/recommand/ugcList",
+      "apiName" : "列表查询",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/recommand/ugcList?cursor=&size=20",
+      "callCount" : 1
+    }, {
+      "method" : "GET",
+      "resource" : "/api/ugc/following/publishers/ugcList",
+      "apiName" : "列表查询",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/following/publishers/ugcList?cursor=&size=20",
+      "callCount" : 1
+    }, {
+      "method" : "GET",
+      "resource" : "/api/ugc/superTopic/list",
+      "apiName" : "列表查询",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/superTopic/list?keyword=&cursor=&size=4",
+      "callCount" : 1
+    }, {
+      "method" : "POST",
+      "resource" : "/api/ugc/createUgc",
+      "apiName" : "创建/发布",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/createUgc",
+      "callCount" : 1
+    }, {
+      "method" : "POST",
+      "resource" : "/api/ugc/likeUgc",
+      "apiName" : "收藏/点赞",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/likeUgc",
+      "callCount" : 1
+    }, {
+      "method" : "POST",
+      "resource" : "/ugc/api/im/token/generate",
+      "apiName" : "刷新令牌",
+      "urlExample" : "https://test-base-api.guadd.fun/ugc/api/im/token/generate",
+      "callCount" : 1
+    }, {
+      "method" : "POST",
+      "resource" : "/api/ugc/unfavoriteUgc",
+      "apiName" : "收藏/点赞",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/unfavoriteUgc",
+      "callCount" : 1
+    }, {
+      "method" : "GET",
+      "resource" : "/api/ugc/viewUserInfo",
+      "apiName" : "查看详情",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/viewUserInfo?target_user_id=6a2a1c1f7d8b5fad864dd959",
+      "callCount" : 1
+    }, {
+      "method" : "GET",
+      "resource" : "/api/ugc/membership/status",
+      "apiName" : "账户信息",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/membership/status",
+      "callCount" : 1
+    }, {
+      "method" : "POST",
+      "resource" : "/api/ugc/followUser",
+      "apiName" : "关注/订阅",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/followUser",
+      "callCount" : 1
+    }, {
+      "method" : "POST",
+      "resource" : "/api/user/login",
+      "apiName" : "用户登录",
+      "urlExample" : "https://truss-api-test.guadd.fun/api/user/login",
+      "callCount" : 1
+    }, {
+      "method" : "GET",
+      "resource" : "/api/ugc/topic/hotList",
+      "apiName" : "列表查询",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/topic/hotList",
+      "callCount" : 1
+    }, {
+      "method" : "GET",
+      "resource" : "/api/ugc/topic/contentList",
+      "apiName" : "列表查询",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/topic/contentList?topicId=6a3b84027d36b14302d1538d&cursor=&size=10&sort=latest",
+      "callCount" : 1
+    }, {
+      "method" : "GET",
+      "resource" : "/api/ugc/competition/list",
+      "apiName" : "列表查询",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/competition/list?cursor=eyJ0IjoiMTIzIiwiaSI6IjZhMmY2MjQ4ZDExZDMzYzQ4YTUyZjdkOSJ9&size=10",
+      "callCount" : 1
+    }, {
+      "method" : "GET",
+      "resource" : "/api/ugc/ugcInfo/commentList",
+      "apiName" : "列表查询",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/ugcInfo/commentList?ugcId=6a5091b50f57e71ff8f10619&cursor=&size=20&parentCommentId=&sortType=latest",
+      "callCount" : 1
+    }, {
+      "method" : "POST",
+      "resource" : "/api/ugc/ugcInfo/publishComment",
+      "apiName" : "评论/回复",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/ugcInfo/publishComment",
+      "callCount" : 1
+    }, {
+      "method" : "GET",
+      "resource" : "/api/ugc/ugcDetail",
+      "apiName" : "查看详情",
+      "urlExample" : "https://funhub-web-test.guadd.fun/api/ugc/ugcDetail?ugcId=6a5091b50f57e71ff8f10619",
+      "callCount" : 1
+    } ],
+    "totalRaw" : 17,
+    "fallback" : false,
+    "rawAiResponse" : null,
+    "total" : 17
+  },
   "envVars" : {
-    "token" : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MTgyMTAwLCJuYmYiOjE3ODQwOTU3MDAsImlhdCI6MTc4NDA5NTcwMH0.8L1JrbV0jXg7ro1PVHPOS6D5ZcF3gcygW3fywHX2cOk"
+    "token" : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzg0MjgxNjczLCJuYmYiOjE3ODQxOTUyNzMsImlhdCI6MTc4NDE5NTI3M30.CWgPV9W8BeeBWC_6WraBfiO4DutAmvwu_VySJaTixNA"
+  },
+  "aiAnalysis" : null,
+  "smokeTestResults" : null,
+  "smokeTestResult" : {
+    "total" : 17,
+    "passed" : 16,
+    "failed" : 1,
+    "successRate" : 94.11764705882352,
+    "duration" : 1127,
+    "executeTime" : "2026-07-16 17:47:52"
   }
 }

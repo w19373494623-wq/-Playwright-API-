@@ -80,7 +80,7 @@ async function runSmokeTest() {
       showLoading(true, '🚀 正在执行烟雾测试...');
     }
 
-    const result = await SmokeApi.run(collection);
+    const result = await SmokeApi.run(collection, store.currentHistoryId);
 
     const panel = $('panel-smoke');
     panel.innerHTML = '';
@@ -104,6 +104,10 @@ async function runSmokeTest() {
     panel.innerHTML = html;
     setStatus('done', '烟雾测试完成 ✅ ' + result.passed + '/' + result.total + ' 通过，成功率 ' + result.successRate);
     showLoading(false);
+    // 通知 EnvVars 组件刷新（新 token 已持久化到 HistoryRecord）
+    if (store.currentHistoryId) {
+      bus.emit('env-vars:changed', store.currentHistoryId);
+    }
   } catch (e) {
     setStatus('error', '烟雾测试失败：' + e.message);
     showLoading(false);

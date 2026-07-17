@@ -3,8 +3,10 @@ import { api } from './client.js';
 /** 烟雾测试 API */
 export const SmokeApi = {
   /** 执行烟雾测试 */
-  run: (collection) =>
-    api.post('/smoke/run', collection),
+  run: (collection, historyId) => {
+    const url = historyId ? `/smoke/run?historyId=${historyId}` : '/smoke/run';
+    return api.post(url, collection);
+  },
 
   /** 获取 JSON 报告 */
   getReport: () => api.get('/smoke/report'),

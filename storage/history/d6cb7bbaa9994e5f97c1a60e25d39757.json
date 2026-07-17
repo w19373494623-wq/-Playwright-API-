@@ -4,12 +4,12 @@
   "url" : "https://funhub-web-test.guadd.fun/ugc",
   "mainDomain" : "funhub-web-test.guadd.fun",
   "createdAt" : 1783073561251,
+  "updateTime" : 1784193093341,
   "duration" : 36,
+  "version" : 2,
   "totalRaw" : 10,
   "totalFiltered" : 35,
   "apiCount" : 9,
-  "summary" : null,
-  "businessFlow" : null,
   "apis" : [ {
     "method" : "POST",
     "resource" : "/api/ugc/unfollowUser",
@@ -169,8 +169,23 @@
       "sec-ch-ua-mobile" : "?0"
     }
   } ],
+  "assets" : null,
+  "summary" : null,
+  "businessFlow" : null,
+  "scenarios" : null,
+  "dedupResult" : null,
   "envVars" : {
     "token" : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5Iiwic3ViIjoiNmEyYTFjMWY3ZDhiNWZhZDg2NGRkOTU5IiwiZXhwIjoxNzgzMTU5OTUyLCJuYmYiOjE3ODMwNzM1NTIsImlhdCI6MTc4MzA3MzU1Mn0.UgujdyFBQBiblYHfdLl1QQbVN5Zhuc17cuN0X5LxupI",
     "userId" : "69ce177dd2addacfdd85f668"
+  },
+  "aiAnalysis" : null,
+  "smokeTestResults" : null,
+  "smokeTestResult" : {
+    "total" : 0,
+    "passed" : 0,
+    "failed" : 0,
+    "successRate" : 0.0,
+    "duration" : 0,
+    "executeTime" : "2026-07-16 17:11:33"
   }
 }

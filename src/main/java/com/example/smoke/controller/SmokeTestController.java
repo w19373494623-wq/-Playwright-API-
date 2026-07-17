@@ -2,6 +2,8 @@ package com.example.smoke.controller;
 
 import com.example.smoke.model.SmokeTestReport;
 import com.example.smoke.service.SmokeTestService;
+import com.example.model.SmokeTestSummary;
+import com.example.service.HistoryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.file.Files;
@@ -32,20 +35,45 @@ public class SmokeTestController {
     private static final Logger log = LoggerFactory.getLogger(SmokeTestController.class);
 
     private final SmokeTestService smokeTestService;
+    private final HistoryService historyService;
 
-    public SmokeTestController(SmokeTestService smokeTestService) {
+    public SmokeTestController(SmokeTestService smokeTestService,
+                                HistoryService historyService) {
         this.smokeTestService = smokeTestService;
+        this.historyService = historyService;
     }
 
     /**
      * 执行烟雾测试。
      * 请求体：Postman Collection v2.1 JSON 字符串。
+     *
+     * @param historyId 可选，指定后测试完成后自动持久化新 token 到历史记录
      */
     @PostMapping(value = "/run", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> runSmokeTest(@RequestBody String collectionJson) {
-        log.info("收到烟雾测试请求");
+    public ResponseEntity<?> runSmokeTest(@RequestBody String collectionJson,
+                                           @RequestParam(required = false) String historyId) {
+        log.info("收到烟雾测试请求" + (historyId != null ? ", historyId=" + historyId : ""));
 
         SmokeTestReport report = smokeTestService.runSmokeTest(collectionJson);
+
+        // 测试完成后，若有 historyId，保存结果摘要到历史记录
+        if (historyId != null) {
+            // 持久化新 token
+            if (report.getLatestVars() != null) {
+                for (Map.Entry<String, String> entry : report.getLatestVars().entrySet()) {
+                    historyService.updateToken(historyId, entry.getKey(), entry.getValue());
+                }
+            }
+            // 保存测试结果摘要
+            SmokeTestSummary summary = new SmokeTestSummary();
+            summary.setTotal(report.getTotal());
+            summary.setPassed(report.getPassed());
+            summary.setFailed(report.getFailed());
+            summary.setSuccessRate(report.getSuccessRate());
+            summary.setDuration(report.getTotalDurationMs());
+            summary.setExecuteTime(report.getTimestamp());
+            historyService.updateSmokeResult(historyId, summary);
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", report.getErrorMessage() == null);

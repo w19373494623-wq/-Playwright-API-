@@ -3,7 +3,9 @@ package com.example.smoke.model;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 烟雾测试总体报告。
@@ -19,6 +21,7 @@ public class SmokeTestReport {
     private List<SmokeTestResult> results = new ArrayList<>();
     private String timestamp;
     private String errorMessage;
+    private Map<String, String> latestVars;
 
     public SmokeTestReport() {
         this.timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
@@ -50,6 +53,9 @@ public class SmokeTestReport {
 
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+
+    public Map<String, String> getLatestVars() { return latestVars; }
+    public void setLatestVars(Map<String, String> latestVars) { this.latestVars = latestVars; }
 
     /** 汇总统计 */
     public void summarize() {

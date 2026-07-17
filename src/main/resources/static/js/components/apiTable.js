@@ -34,8 +34,6 @@ function renderTable() {
   const list = store.assets;
   const hasData = list && list.length > 0;
 
-  $('resultCard').style.display = hasData ? 'block' : 'none';
-
   const tbody = $('resultBody');
   tbody.innerHTML = '';
 

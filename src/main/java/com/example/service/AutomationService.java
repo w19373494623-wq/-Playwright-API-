@@ -60,11 +60,10 @@ public class AutomationService {
      *
      * 执行流程：
      *  1. 加载 HistoryRecord → 生成 Postman Collection JSON
-     *  2. 读取 AutomationConfig，按需登录获取 Token
-     *  3. 将 Token 注入 Collection 变量数组（保持 {{token}} 占位符供 Executor 解析）
-     *  4. 调用 SmokeTestService 逐条执行接口
-     *  5. 每条接口执行后，根据 VariableRule 从响应提取变量 → 存入 VariableResolver
-     *  6. 新提取的变量自动加入 Executor 变量列表，供后续接口使用
+     *  2. 检查 envVars 是否已有有效 token，没有则自动调用 LoginService 获取并持久化
+     *  3. 将 HistoryRecord.envVars 注入 Collection 变量数组（含 {{token}} 等占位符）
+     *  4. 调用 SmokeTestService 逐条执行接口，Executor 自动替换 {{var}} 为实际值
+     *  5. 每条接口执行后，根据 VariableRule 从响应提取变量
      *
      * @param historyId 历史记录 ID
      * @return 烟雾测试报告
@@ -82,15 +81,44 @@ public class AutomationService {
         // 1. 转 Collection JSON
         String collectionJson = historyService.toApifoxCollectionJson(record);
 
-        // 2. 读取配置并按需登录
-        AutomationConfig config = automationConfigService.getConfig();
-        if ("LOGIN".equals(config.getAuthType())) {
-            String token = loginService.login(config);
-            variableResolver.put("token", token);
-            log.info("登录成功，token 已写入 VariableResolver");
+        // 2. 检查 envVars 是否已有 token，没有则自动登录获取
+        Map<String, String> envVars = record.getEnvVars();
+        boolean hasToken = envVars != null && envVars.containsKey("token")
+                && envVars.get("token") != null && !envVars.get("token").isEmpty();
 
-            // 3. 将 Token 注入 Collection 变量数组
-            collectionJson = injectTokenToVariables(collectionJson, token);
+        if (!hasToken) {
+            AutomationConfig config = automationConfigService.getConfig();
+            if ("LOGIN".equals(config.getAuthType())) {
+                log.info("envVars 中无有效 token，触发自动登录: loginUrl={}", config.getLoginUrl());
+                try {
+                    String token = loginService.login(config);
+                    log.info("自动登录成功，token 长度: {}", token.length());
+
+                    // 保存 token 到 HistoryRecord.envVars（持久化）
+                    if (envVars == null) {
+                        envVars = new java.util.LinkedHashMap<>();
+                    }
+                    envVars.put("token", token);
+                    historyService.updateEnvVars(historyId, envVars);
+                    record.setEnvVars(envVars);
+                    log.info("token 已保存到 HistoryRecord.envVars, historyId={}", historyId);
+
+                    variableResolver.put("token", token);
+                } catch (Exception e) {
+                    log.warn("自动登录失败，将使用已有环境变量继续: {}", e.getMessage());
+                }
+            } else {
+                log.info("无有效 token 且未配置 LOGIN 模式，将使用环境变量中的现有值");
+            }
+        } else {
+            log.info("envVars 中已有 token，跳过自动登录");
+        }
+
+        // 3. 注入 HistoryRecord.envVars（含新获取或已有的 token）
+        envVars = record.getEnvVars();
+        if (envVars != null && !envVars.isEmpty()) {
+            collectionJson = injectVariables(collectionJson, envVars);
+            log.info("已注入 {} 个环境变量: {}", envVars.size(), envVars.keySet());
         }
 
         // 4. 执行烟雾测试，每条接口完成后提取变量
@@ -102,35 +130,47 @@ public class AutomationService {
      * 保持 {{token}} 占位符，由 Executor 在逐条执行时解析。
      */
     private String injectTokenToVariables(String collectionJson, String token) {
+        return injectVariables(collectionJson, Map.of("token", token));
+    }
+
+    /**
+     * 批量注入环境变量到 Collection JSON 的 variable 数组。
+     * 已存在的变量覆盖值，不存在的追加。
+     * 由 Executor 在逐条执行时通过 replaceVariables() 解析 {{key}}。
+     */
+    private String injectVariables(String collectionJson, Map<String, String> variables) {
         try {
             ObjectNode root = (ObjectNode) MAPPER.readTree(collectionJson);
-            ArrayNode variables = (ArrayNode) root.get("variable");
+            ArrayNode vars = (ArrayNode) root.get("variable");
+            if (vars == null) {
+                vars = MAPPER.createArrayNode();
+                root.set("variable", vars);
+            }
 
-            boolean found = false;
-            if (variables != null) {
-                for (int i = 0; i < variables.size(); i++) {
-                    ObjectNode var = (ObjectNode) variables.get(i);
-                    if ("token".equals(var.get("key").asText())) {
-                        var.put("value", token);
+            for (Map.Entry<String, String> entry : variables.entrySet()) {
+                String key = entry.getKey();
+                String value = entry.getValue();
+                if (value == null || value.isEmpty()) continue;
+
+                boolean found = false;
+                for (int i = 0; i < vars.size(); i++) {
+                    ObjectNode var = (ObjectNode) vars.get(i);
+                    if (key.equals(var.get("key").asText())) {
+                        var.put("value", value);
                         found = true;
                         break;
                     }
                 }
-            }
-
-            if (!found) {
-                if (variables == null) {
-                    variables = MAPPER.createArrayNode();
-                    root.set("variable", variables);
+                if (!found) {
+                    ObjectNode newVar = vars.addObject();
+                    newVar.put("key", key);
+                    newVar.put("value", value);
                 }
-                ObjectNode tokenVar = variables.addObject();
-                tokenVar.put("key", "token");
-                tokenVar.put("value", token);
             }
 
             return MAPPER.writeValueAsString(root);
         } catch (Exception e) {
-            throw new RuntimeException("Token 注入失败: " + e.getMessage(), e);
+            throw new RuntimeException("环境变量注入失败: " + e.getMessage(), e);
         }
     }
 

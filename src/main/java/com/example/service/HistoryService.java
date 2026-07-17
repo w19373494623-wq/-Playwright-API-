@@ -2,8 +2,10 @@ package com.example.service;
 
 import com.example.model.ApiAsset;
 import com.example.model.ApiSummary;
+import com.example.model.BusinessFlow;
 import com.example.model.DedupResult;
 import com.example.model.HistoryRecord;
+import com.example.model.SmokeTestSummary;
 import com.example.repository.HistoryRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -33,17 +35,11 @@ public class HistoryService {
     }
 
     /**
-     * 第一阶段保存：Filter + Dedup 后立即保存，不依赖 AI。
-     *
-     * @param assets     过滤后的完整资产列表
-     * @param mainDomain 主域名
-     * @param pageUrl    录制目标网址
-     * @param startTime  录制开始时间戳
-     * @return 已保存的 HistoryRecord
+     * 保存录制项目快照。
+     * 包含完整接口资产 + 精简列表，不依赖 AI 分析结果。
      */
     public HistoryRecord save(List<ApiAsset> assets,
                               String mainDomain, String pageUrl, long startTime) {
-        // 机械去重
         DedupResult dedupResult = dedupService.dedup(assets);
 
         String id = UUID.randomUUID().toString().replace("-", "");
@@ -55,28 +51,42 @@ public class HistoryService {
         record.setUrl(pageUrl);
         record.setMainDomain(mainDomain);
         record.setCreatedAt(now);
+        record.setUpdateTime(now);
         record.setDuration((now - startTime) / 1000);
+        record.setVersion(2);
+
         record.setTotalRaw(dedupResult.getTotalRaw());
         record.setTotalFiltered(assets.size());
         record.setApiCount(dedupResult.getTotal());
 
-        // 构建精简 API 列表
-        List<ApiSummary> apiSummaries = buildApiSummaries(assets, dedupResult);
-        record.setApis(apiSummaries);
+        // 保存完整资产（供测试执行、详情展示）
+        record.setAssets(new ArrayList<>(assets));
 
-        // 提取环境变量并保存
+        // 保存精简列表（供前端列表展示）
+        record.setApis(buildApiSummaries(assets, dedupResult));
+
+        // 提取并保存环境变量
         record.setEnvVars(extractEnvVars(assets));
 
         historyRepository.save(record);
-        log.info("历史记录已保存: id={}, title={}, apis={}, envVars={}",
-                id, record.getTitle(), apiSummaries.size(), record.getEnvVars().size());
+        log.info("项目快照已保存: id={}, title={}, apis={}, assets={}, envVars={}",
+                id, record.getTitle(), record.getApis().size(), assets.size(), record.getEnvVars().size());
         return record;
     }
 
     /**
-     * 第二阶段更新：AI 分析成功后回填 summary / businessFlow。
+     * 统一更新项目：所有更新操作通过此方法，保证 updateTime 同步。
      */
-    public void updateAiResult(String id, String summary, Object businessFlow) {
+    public void updateProject(HistoryRecord record) {
+        if (record == null) return;
+        record.setUpdateTime(System.currentTimeMillis());
+        historyRepository.save(record);
+    }
+
+    /**
+     * 更新 AI 分析结果（业务链路）。
+     */
+    public void updateAiResult(String id, String summary, BusinessFlow businessFlow) {
         HistoryRecord record = historyRepository.findById(id);
         if (record == null) {
             log.warn("更新AI结果失败，历史记录不存在: id={}", id);
@@ -84,8 +94,103 @@ public class HistoryService {
         }
         if (summary != null) record.setSummary(summary);
         if (businessFlow != null) record.setBusinessFlow(businessFlow);
-        historyRepository.save(record);
-        log.info("历史记录AI结果已更新: id={}", id);
+        updateProject(record);
+        log.info("AI业务链路已更新: id={}", id);
+    }
+
+    /**
+     * 更新 AI 分析扩展数据到 aiAnalysis Map。
+     */
+    public void updateAiAnalysis(String id, String key, Object value) {
+        HistoryRecord record = historyRepository.findById(id);
+        if (record == null) {
+            log.warn("更新AI分析扩展数据失败，历史记录不存在: id={}", id);
+            return;
+        }
+        Map<String, Object> aiAnalysis = record.getAiAnalysis();
+        if (aiAnalysis == null) {
+            aiAnalysis = new LinkedHashMap<>();
+        }
+        aiAnalysis.put(key, value);
+        record.setAiAnalysis(aiAnalysis);
+        updateProject(record);
+        log.info("AI分析扩展数据已更新: id={}, key={}", id, key);
+    }
+
+    /**
+     * 更新 AI 去重结果缓存。
+     */
+    public void updateDedupResult(String id, DedupResult dedupResult) {
+        HistoryRecord record = historyRepository.findById(id);
+        if (record == null) {
+            log.warn("更新去重结果失败，历史记录不存在: id={}", id);
+            return;
+        }
+        record.setDedupResult(dedupResult);
+        updateProject(record);
+        log.info("AI去重结果已缓存: id={}, total={}", id, dedupResult.getTotal());
+    }
+
+    /**
+     * 更新环境变量。
+     */
+    public void updateEnvVars(String id, Map<String, String> envVars) {
+        HistoryRecord record = historyRepository.findById(id);
+        if (record == null) {
+            log.warn("更新环境变量失败，历史记录不存在: id={}", id);
+            return;
+        }
+        record.setEnvVars(envVars);
+        updateProject(record);
+        log.info("环境变量已更新: id={}, vars={}", id, envVars.keySet());
+    }
+
+    /**
+     * 统一更新 token 到环境变量。
+     * 支持 token/accessToken/access_token/jwt，合并到现有 envVars 中。
+     */
+    public void updateToken(String id, String tokenKey, String tokenValue) {
+        HistoryRecord record = historyRepository.findById(id);
+        if (record == null) {
+            log.warn("更新 token 失败，历史记录不存在: id={}", id);
+            return;
+        }
+        Map<String, String> envVars = record.getEnvVars();
+        if (envVars == null) {
+            envVars = new java.util.LinkedHashMap<>();
+        }
+        envVars.put(tokenKey, tokenValue);
+        record.setEnvVars(envVars);
+        updateProject(record);
+        log.info("token 已更新到历史记录: id={}, key={}, length={}", id, tokenKey, tokenValue.length());
+    }
+
+    /**
+     * 更新烟雾测试结果摘要。
+     */
+    public void updateSmokeResult(String id, SmokeTestSummary result) {
+        HistoryRecord record = historyRepository.findById(id);
+        if (record == null) {
+            log.warn("更新烟雾测试结果失败，历史记录不存在: id={}", id);
+            return;
+        }
+        record.setSmokeTestResult(result);
+        updateProject(record);
+        log.info("烟雾测试结果已保存: id={}, {}/{} 通过", id, result.getPassed(), result.getTotal());
+    }
+
+    /**
+     * 更新多场景识别结果。
+     */
+    public void updateScenarios(String id, List<Map<String, Object>> scenarios) {
+        HistoryRecord record = historyRepository.findById(id);
+        if (record == null) {
+            log.warn("更新场景结果失败，历史记录不存在: id={}", id);
+            return;
+        }
+        record.setScenarios(scenarios);
+        updateProject(record);
+        log.info("多场景识别结果已更新: id={}, count={}", id, scenarios != null ? scenarios.size() : 0);
     }
 
     /**
@@ -120,29 +225,15 @@ public class HistoryService {
             return;
         }
         record.setTitle(newTitle);
-        historyRepository.save(record);
+        updateProject(record);
         log.info("历史记录标题已更新: id={}, title={}", id, newTitle);
-    }
-
-    /**
-     * 更新历史记录环境变量。
-     */
-    public void updateEnvVars(String id, Map<String, String> envVars) {
-        HistoryRecord record = historyRepository.findById(id);
-        if (record == null) {
-            log.warn("更新环境变量失败，历史记录不存在: id={}", id);
-            return;
-        }
-        record.setEnvVars(envVars);
-        historyRepository.save(record);
-        log.info("历史记录环境变量已更新: id={}, vars={}", id, envVars.keySet());
     }
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 将 HistoryRecord 转为 Postman Collection v2.1 JSON 字符串。
-     * 供 AutomationService 调用，复用 SmokeTestService 执行烟雾测试。
+     * 优先使用完整 assets，降级到 apis。
      */
     public String toApifoxCollectionJson(HistoryRecord record) {
         try {
@@ -178,13 +269,25 @@ public class HistoryService {
         }
         collection.put("variable", varList);
 
-        // group by module
-        List<ApiSummary> apis = record.getApis();
+        // 优先用 assets，降级到 apis
+        List<?> sourceItems = record.getAssets() != null ? record.getAssets() : record.getApis();
         Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
-        if (apis != null) {
-            for (ApiSummary api : apis) {
-                String module = inferModuleFromUrl(api.getResource());
-                grouped.computeIfAbsent(module, k -> new ArrayList<>()).add(buildItemMap(api, baseUrl));
+
+        if (sourceItems != null) {
+            for (Object item : sourceItems) {
+                String resource;
+                String method;
+                if (item instanceof ApiAsset asset) {
+                    method = asset.getMethod() != null ? asset.getMethod() : "GET";
+                    resource = asset.getResource() != null ? asset.getResource() : "/";
+                } else if (item instanceof ApiSummary api) {
+                    method = api.getMethod() != null ? api.getMethod() : "GET";
+                    resource = api.getResource() != null ? api.getResource() : "/";
+                } else {
+                    continue;
+                }
+                String module = inferModuleFromUrl(resource);
+                grouped.computeIfAbsent(module, k -> new ArrayList<>()).add(buildItemMap(item, baseUrl));
             }
         }
 
@@ -218,22 +321,48 @@ public class HistoryService {
         return "其他";
     }
 
-    private Map<String, Object> buildItemMap(ApiSummary api, String baseUrl) {
-        String method = api.getMethod() != null ? api.getMethod() : "GET";
-        String resource = api.getResource() != null ? api.getResource() : "/";
-        String apiName = api.getApiName() != null ? api.getApiName() : method + " " + resource;
+    private Map<String, Object> buildItemMap(Object item, String baseUrl) {
+        String method;
+        String resource;
+        String apiName;
+        Map<String, String> storedHeaders;
+        String requestBody;
+        String fullUrl;
+
+        if (item instanceof ApiAsset asset) {
+            method = asset.getMethod() != null ? asset.getMethod() : "GET";
+            resource = asset.getResource() != null ? asset.getResource() : "/";
+            apiName = method + " " + resource;
+            storedHeaders = asset.getHeaders();
+            requestBody = asset.getRequestBody();
+            fullUrl = asset.getUrl();
+        } else if (item instanceof ApiSummary api) {
+            method = api.getMethod() != null ? api.getMethod() : "GET";
+            resource = api.getResource() != null ? api.getResource() : "/";
+            apiName = api.getApiName() != null ? api.getApiName() : method + " " + resource;
+            storedHeaders = api.getHeaders();
+            requestBody = api.getRequestBody();
+            fullUrl = api.getUrl();
+        } else {
+            method = "GET";
+            resource = "/";
+            apiName = "GET /";
+            storedHeaders = null;
+            requestBody = null;
+            fullUrl = null;
+        }
+
         String name = !apiName.isBlank() && !apiName.startsWith("GET") && !apiName.startsWith("POST")
                 ? apiName : method + " " + resource;
 
-        Map<String, Object> item = new LinkedHashMap<>();
-        item.put("name", name);
-        item.put("description", "历史录制接口\n\n资源路径: " + resource);
+        Map<String, Object> itemMap = new LinkedHashMap<>();
+        itemMap.put("name", name);
+        itemMap.put("description", "历史录制接口\n\n资源路径: " + resource);
 
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("method", method);
 
         // URL
-        String fullUrl = api.getUrl();
         List<Map<String, String>> queryParams = null;
         if (fullUrl != null && !fullUrl.isBlank()) {
             try {
@@ -259,7 +388,6 @@ public class HistoryService {
 
         // Headers
         List<Map<String, String>> headerList = new ArrayList<>();
-        Map<String, String> storedHeaders = api.getHeaders();
         if (storedHeaders != null && !storedHeaders.isEmpty()) {
             boolean hasAuth = false;
             for (Map.Entry<String, String> h : storedHeaders.entrySet()) {
@@ -284,7 +412,6 @@ public class HistoryService {
         request.put("header", headerList);
 
         // Body
-        String requestBody = api.getRequestBody();
         if (requestBody != null && !requestBody.isBlank() && !"null".equals(requestBody)) {
             Map<String, Object> bodyObj = new LinkedHashMap<>();
             bodyObj.put("mode", "raw");
@@ -300,8 +427,8 @@ public class HistoryService {
             request.put("body", bodyObj);
         }
 
-        item.put("request", request);
-        return item;
+        itemMap.put("request", request);
+        return itemMap;
     }
 
     // ===== 内部方法 =====
@@ -312,7 +439,6 @@ public class HistoryService {
     }
 
     private List<ApiSummary> buildApiSummaries(List<ApiAsset> assets, DedupResult dedupResult) {
-        // 构建 method+resource → ApiAsset 映射
         Map<String, ApiAsset> assetMap = new LinkedHashMap<>();
         for (ApiAsset a : assets) {
             String key = a.getMethod() + " " + (a.getResource() != null ? a.getResource() : a.getUrl());
@@ -341,9 +467,6 @@ public class HistoryService {
         return summaries;
     }
 
-    /**
-     * 从 ApiAsset 列表中提取环境变量（token, userId 等）。
-     */
     private Map<String, String> extractEnvVars(List<ApiAsset> assets) {
         Map<String, String> vars = new LinkedHashMap<>();
         for (ApiAsset a : assets) {
@@ -356,7 +479,6 @@ public class HistoryService {
                     }
                 }
             }
-            // 从响应体提取常见字段
             String resBody = a.getResponseBody();
             if (resBody != null) {
                 extractFromResponse(resBody, vars);

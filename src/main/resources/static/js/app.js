@@ -19,6 +19,7 @@ import { initDocs } from './components/docs.js';
 import { initExport } from './components/export.js';
 import { initScenario } from './components/scenario.js';
 import { initSmokeTest } from './components/smokeTest.js';
+import { initApifoxMerge } from './components/apifoxMerge.js';
 import { initHistory } from './components/history.js';
 import { initEnvVars } from './components/envVars.js';
 
@@ -49,6 +50,7 @@ const inits = [
   ['initExport', initExport],
   ['initScenario', initScenario],
   ['initSmokeTest', initSmokeTest],
+  ['initApifoxMerge', initApifoxMerge],
   ['initHistory', initHistory],
   ['initEnvVars', initEnvVars],
 ];

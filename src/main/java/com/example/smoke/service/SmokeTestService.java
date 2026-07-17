@@ -165,14 +165,28 @@ public class SmokeTestService {
                     for (Map.Entry<String, String> entry : result.getExtractedVariables().entrySet()) {
                         String varName = entry.getKey();
                         String varValue = entry.getValue();
-                        // 检查变量是否已存在，不存在则新增
-                        boolean exists = variables.stream().anyMatch(v -> varName.equals(v.get("key")));
+                        boolean isTokenType = "token".equals(varName) || "accessToken".equals(varName);
+                        boolean exists = false;
+                        for (Map<String, String> v : variables) {
+                            if (varName.equals(v.get("key"))) {
+                                exists = true;
+                                if (isTokenType) {
+                                    String oldVal = v.get("value");
+                                    v.put("value", varValue);
+                                    log.info("  → 覆盖 {}: 旧长度={}, 新长度={}",
+                                            varName,
+                                            oldVal != null ? oldVal.length() : 0,
+                                            varValue.length());
+                                }
+                                break;
+                            }
+                        }
                         if (!exists) {
                             Map<String, String> newVar = new LinkedHashMap<>();
                             newVar.put("key", varName);
                             newVar.put("value", varValue);
                             variables.add(newVar);
-                            log.info("  → 自动提取变量: {} = {}", varName,
+                            log.info("  → 新增变量: {} = {}", varName,
                                     varValue.length() > 32 ? varValue.substring(0, 32) + "..." : varValue);
                         }
                     }
@@ -187,7 +201,21 @@ public class SmokeTestService {
                 index++;
             }
 
-            // 6. 汇总统计
+            // 6. 收集最终 token 类型变量（供持久化使用）
+            Map<String, String> latestVars = new LinkedHashMap<>();
+            for (Map<String, String> v : variables) {
+                String key = v.get("key");
+                if ("token".equals(key) || "accessToken".equals(key)
+                        || "access_token".equals(key) || "jwt".equals(key)) {
+                    latestVars.put(key, v.get("value"));
+                }
+            }
+            if (!latestVars.isEmpty()) {
+                report.setLatestVars(latestVars);
+                log.info("最终 token 变量: {}", latestVars.keySet());
+            }
+
+            // 7. 汇总统计
             report.summarize();
 
         } catch (Exception e) {
@@ -195,7 +223,7 @@ public class SmokeTestService {
             report.setErrorMessage("执行异常: " + e.getMessage());
         }
 
-        // 7. 打印统计
+        // 8. 打印统计
         log.info("----------------------------------------");
         log.info("  完成: {} 通过 / {} 失败 / {} 总计  (成功率 {}%)",
                 report.getPassed(), report.getFailed(), report.getTotal(), String.format("%.1f", report.getSuccessRate()));

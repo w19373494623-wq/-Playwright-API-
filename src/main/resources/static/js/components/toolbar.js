@@ -63,7 +63,6 @@ async function handleStart() {
   setStatus('active', '浏览器正在打开，请等待...');
   $('startBtn').disabled = true;
   $('stopBtn').disabled = false;
-  $('resultCard').style.display = 'none';
 
   // --- Store ---
   updateStore('assets', []);
